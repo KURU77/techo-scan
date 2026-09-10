@@ -1,0 +1,1624 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>手帳スキャン — 紙の手帳をカレンダーに移す</title>
+<meta name="description" content="紙の手帳の写真を読み取って予定データに変換し、.ics として FirstSeed カレンダーなどに追加できる PWA。既存の予定は消さず、追加だけします。">
+<meta name="theme-color" content="#F4F1EA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131317" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="手帳スキャン">
+<meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* ============================================================
+   手帳スキャン
+   紙の手帳を撮る → 予定を読み取る → .ics で追加する
+   色は :root のトークンだけで定義し、light / dark / OS依存 の
+   3状態すべてで解決するようにしてある。
+   ============================================================ */
+:root{
+  --paper:#F4F1EA; --card:#FFFDF8; --card-2:#EDE8DE; --sunken:#E7E2D6;
+  --ink:#1C1A17; --muted:#6E675C; --faint:#948C7E;
+  --line:#DAD3C5; --line-soft:#E8E2D6;
+  --ai:#1F4E79; --ai-ink:#1A4266; --ai-soft:#E3EAF2;
+  --warn:#A8431E; --warn-soft:#F7E7DF;
+  --ok:#2F6B45; --ok-soft:#E3EDE6;
+  --shadow:0 1px 2px rgba(28,26,23,.05), 0 8px 22px rgba(28,26,23,.07);
+  --shadow-lift:0 2px 6px rgba(28,26,23,.09), 0 18px 44px rgba(28,26,23,.16);
+  --scrim:rgba(28,26,23,.42);
+  --f-body:"Zen Kaku Gothic New",-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r:14px; --r-sm:9px;
+  --tabh:60px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#131317; --card:#1C1C21; --card-2:#24242B; --sunken:#0E0E12;
+    --ink:#EDEAE3; --muted:#9C958A; --faint:#7B7568;
+    --line:#31313A; --line-soft:#282830;
+    --ai:#7FB3E0; --ai-ink:#A6CCEC; --ai-soft:#16283A;
+    --warn:#E08A6A; --warn-soft:#39201A;
+    --ok:#79C295; --ok-soft:#16301F;
+    --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 26px rgba(0,0,0,.35);
+    --shadow-lift:0 2px 8px rgba(0,0,0,.5), 0 20px 48px rgba(0,0,0,.5);
+    --scrim:rgba(0,0,0,.6);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#131317; --card:#1C1C21; --card-2:#24242B; --sunken:#0E0E12;
+  --ink:#EDEAE3; --muted:#9C958A; --faint:#7B7568;
+  --line:#31313A; --line-soft:#282830;
+  --ai:#7FB3E0; --ai-ink:#A6CCEC; --ai-soft:#16283A;
+  --warn:#E08A6A; --warn-soft:#39201A;
+  --ok:#79C295; --ok-soft:#16301F;
+  --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 26px rgba(0,0,0,.35);
+  --shadow-lift:0 2px 8px rgba(0,0,0,.5), 0 20px 48px rgba(0,0,0,.5);
+  --scrim:rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:var(--f-body); font-size:15px; line-height:1.65;
+  -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased;
+  overscroll-behavior-y:none;
+}
+button,input,select,textarea{font:inherit; color:inherit}
+button{cursor:pointer; -webkit-tap-highlight-color:transparent}
+a{color:var(--ai)}
+
+/* ---- レイアウト ---- */
+.wrap{max-width:660px; margin:0 auto; padding:0 16px}
+header.top{
+  position:sticky; top:0; z-index:30; background:var(--paper);
+  border-bottom:1px solid var(--line-soft);
+  padding-top:env(safe-area-inset-top);
+}
+.top-in{display:flex; align-items:center; gap:10px; height:52px}
+.brand{font-weight:700; letter-spacing:.02em; font-size:16px; flex:1; min-width:0;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.brand small{font-weight:400; color:var(--faint); font-size:12px; margin-left:8px}
+.icon-btn{
+  border:1px solid var(--line); background:var(--card); color:var(--muted);
+  width:36px; height:36px; border-radius:10px; display:grid; place-items:center; flex:none;
+}
+.icon-btn:active{transform:scale(.96)}
+.icon-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+main{padding:16px 0 calc(var(--tabh) + 28px + env(safe-area-inset-bottom))}
+.view{display:none}
+.view.on{display:block}
+
+nav.tabs{
+  position:fixed; left:0; right:0; bottom:0; z-index:30;
+  background:color-mix(in srgb, var(--paper) 92%, transparent);
+  -webkit-backdrop-filter:saturate(180%) blur(14px); backdrop-filter:saturate(180%) blur(14px);
+  border-top:1px solid var(--line-soft); padding-bottom:env(safe-area-inset-bottom);
+}
+.tabs-in{display:grid; grid-template-columns:repeat(4,1fr); max-width:660px; margin:0 auto}
+.tab{
+  background:none; border:0; height:var(--tabh); color:var(--faint);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  font-size:10.5px; letter-spacing:.02em; position:relative;
+}
+.tab svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tab.on{color:var(--ai); font-weight:700}
+.tab .badge{
+  position:absolute; top:8px; left:50%; margin-left:6px;
+  background:var(--warn); color:#fff; font-size:10px; font-weight:700; line-height:1;
+  padding:2px 5px; border-radius:99px; min-width:16px; text-align:center;
+}
+
+/* ---- パーツ ---- */
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow)}
+.sec{margin:0 0 18px}
+.sec h2{
+  font-size:12px; font-weight:700; letter-spacing:.09em; color:var(--faint);
+  margin:0 0 9px 2px; text-transform:none;
+}
+.hint{font-size:12.5px; color:var(--muted); line-height:1.7; margin:8px 2px 0}
+.hint code{font-family:var(--f-mono); font-size:12px; background:var(--sunken); padding:1px 5px; border-radius:5px}
+
+.btn{
+  border:1px solid var(--line); background:var(--card); color:var(--ink);
+  border-radius:11px; padding:11px 14px; font-size:14px; font-weight:500;
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+}
+.btn:active{transform:scale(.985)}
+.btn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round; flex:none}
+.btn.primary{background:var(--ai); border-color:var(--ai); color:var(--paper); font-weight:700}
+.btn.ghost{background:transparent}
+.btn.wide{width:100%}
+.btn[disabled]{opacity:.45; pointer-events:none}
+.btn.danger{color:var(--warn); border-color:color-mix(in srgb, var(--warn) 35%, var(--line))}
+.btn-row{display:flex; gap:9px; flex-wrap:wrap}
+.btn-row .btn{flex:1 1 auto}
+
+label.f{display:block; margin:0 0 12px}
+label.f > span{display:block; font-size:12px; font-weight:700; color:var(--muted); margin:0 0 5px 2px}
+.inp{
+  width:100%; background:var(--card); border:1px solid var(--line); color:var(--ink);
+  border-radius:10px; padding:10px 12px; font-size:15px; -webkit-appearance:none; appearance:none;
+}
+select.inp{background-image:none}
+.inp:focus{outline:2px solid color-mix(in srgb, var(--ai) 45%, transparent); outline-offset:1px; border-color:var(--ai)}
+textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
+.row2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+
+.chip{
+  display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700;
+  padding:3px 8px; border-radius:99px; background:var(--sunken); color:var(--muted);
+}
+.chip.warn{background:var(--warn-soft); color:var(--warn)}
+.chip.ok{background:var(--ok-soft); color:var(--ok)}
+.chip.ai{background:var(--ai-soft); color:var(--ai-ink)}
+
+.empty{
+  text-align:center; color:var(--faint); font-size:13.5px; padding:38px 18px; line-height:1.9;
+  border:1px dashed var(--line); border-radius:var(--r); background:color-mix(in srgb, var(--card) 55%, transparent);
+}
+.empty b{display:block; color:var(--muted); font-size:15px; font-weight:700; margin-bottom:6px}
+
+/* ---- 画像ドロップ ---- */
+.drop{
+  border:1.5px dashed var(--line); border-radius:var(--r); background:var(--card);
+  padding:26px 18px; text-align:center; transition:border-color .15s, background .15s;
+}
+.drop.over{border-color:var(--ai); background:var(--ai-soft)}
+.drop .big{width:34px;height:34px;stroke:var(--faint);fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round; margin-bottom:6px}
+.drop p{margin:0 0 12px; color:var(--muted); font-size:13.5px}
+
+.shots{display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:9px; margin-top:12px}
+.shot{position:relative; border-radius:10px; overflow:hidden; border:1px solid var(--line); background:var(--sunken); aspect-ratio:3/4}
+.shot img{width:100%; height:100%; object-fit:cover; display:block}
+.shot .x{
+  position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:8px;
+  background:var(--scrim); color:#fff; border:0; display:grid; place-items:center; font-size:14px; line-height:1;
+}
+.shot .kb{
+  position:absolute; left:0; right:0; bottom:0; background:var(--scrim); color:#fff;
+  font-size:10px; font-family:var(--f-mono); padding:2px 5px; text-align:right;
+}
+
+/* ---- 進捗 ---- */
+.prog{margin-top:12px; padding:13px 15px; border-radius:var(--r); background:var(--ai-soft); color:var(--ai-ink); font-size:13px}
+.prog .bar{height:4px; border-radius:99px; background:color-mix(in srgb, var(--ai) 22%, transparent); margin-top:9px; overflow:hidden}
+.prog .bar i{display:block; height:100%; background:var(--ai); width:30%; border-radius:99px; animation:slide 1.35s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}
+.errbox{margin-top:12px; padding:13px 15px; border-radius:var(--r); background:var(--warn-soft); color:var(--warn); font-size:13px; line-height:1.75}
+.errbox b{display:block; margin-bottom:3px}
+
+/* ---- 予定リスト ---- */
+.daygrp{margin:0 0 16px}
+.dayhead{
+  display:flex; align-items:baseline; gap:9px; padding:0 3px 7px;
+  position:sticky; top:52px; background:var(--paper); z-index:5;
+}
+.dayhead .d{font-weight:700; font-size:14.5px}
+.dayhead .w{font-size:12px; color:var(--faint)}
+.dayhead .n{margin-left:auto; font-size:11px; color:var(--faint); font-family:var(--f-mono)}
+.dayhead.sun .d{color:var(--warn)}
+.dayhead.sat .d{color:var(--ai)}
+
+.ev{
+  display:flex; gap:11px; align-items:flex-start; background:var(--card);
+  border:1px solid var(--line); border-radius:var(--r); padding:11px 12px; margin-bottom:8px;
+  box-shadow:var(--shadow);
+}
+.ev.off{opacity:.5}
+.ev.sent{border-style:dashed}
+.ck{
+  width:22px; height:22px; flex:none; margin-top:2px; border-radius:7px; border:1.5px solid var(--line);
+  background:var(--card); display:grid; place-items:center; padding:0;
+}
+.ck[aria-checked="true"]{background:var(--ai); border-color:var(--ai)}
+.ck svg{width:14px;height:14px;stroke:var(--paper);fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round; opacity:0}
+.ck[aria-checked="true"] svg{opacity:1}
+.ev-body{flex:1; min-width:0; text-align:left; background:none; border:0; padding:0}
+.ev-time{font-family:var(--f-mono); font-size:11.5px; color:var(--ai-ink); font-weight:500; letter-spacing:.01em}
+.ev-time.allday{color:var(--muted)}
+.ev-title{font-weight:700; font-size:15px; line-height:1.45; margin:1px 0 0; word-break:break-word}
+.ev-meta{font-size:12px; color:var(--muted); margin-top:3px; word-break:break-word}
+.ev-tags{display:flex; gap:5px; flex-wrap:wrap; margin-top:6px}
+
+.listbar{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  margin:0 0 14px; padding:10px 12px; border-radius:var(--r);
+  background:var(--card); border:1px solid var(--line);
+}
+.listbar .cnt{font-size:13px; font-weight:700; flex:1; min-width:0}
+.listbar .cnt em{font-style:normal; color:var(--ai); font-family:var(--f-mono)}
+.mini{
+  border:1px solid var(--line); background:var(--card); border-radius:8px;
+  padding:5px 9px; font-size:11.5px; font-weight:700; color:var(--muted);
+}
+.mini.on{background:var(--ai-soft); color:var(--ai-ink); border-color:color-mix(in srgb, var(--ai) 35%, var(--line))}
+
+/* ---- シート ---- */
+.sheet-bg{
+  position:fixed; inset:0; background:var(--scrim); z-index:60; opacity:0; pointer-events:none;
+  transition:opacity .2s; -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px);
+}
+.sheet-bg.on{opacity:1; pointer-events:auto}
+.sheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:61; max-height:88vh; overflow:auto;
+  background:var(--paper); border-radius:20px 20px 0 0; border-top:1px solid var(--line);
+  transform:translateY(100%); transition:transform .24s cubic-bezier(.3,.9,.3,1);
+  padding-bottom:calc(20px + env(safe-area-inset-bottom));
+  box-shadow:var(--shadow-lift);
+}
+.sheet.on{transform:translateY(0)}
+.sheet-in{max-width:660px; margin:0 auto; padding:0 16px}
+.grab{width:38px; height:4px; border-radius:99px; background:var(--line); margin:9px auto 4px}
+.sheet h3{font-size:16px; margin:6px 0 14px; font-weight:700}
+
+/* ---- 書き出し ---- */
+.outbox{
+  font-family:var(--f-mono); font-size:12px; line-height:1.75; white-space:pre-wrap;
+  background:var(--sunken); border:1px solid var(--line); border-radius:var(--r);
+  padding:12px 13px; max-height:300px; overflow:auto; word-break:break-word;
+}
+.step{display:flex; gap:11px; margin:0 0 13px; align-items:flex-start}
+.step .no{
+  flex:none; width:22px; height:22px; border-radius:99px; background:var(--ai); color:var(--paper);
+  font-size:11.5px; font-weight:700; display:grid; place-items:center; margin-top:2px; font-family:var(--f-mono);
+}
+.step .tx{font-size:13.5px; line-height:1.75; color:var(--muted)}
+.step .tx b{color:var(--ink)}
+
+.faq{border-top:1px solid var(--line-soft); padding:13px 2px}
+.faq:first-of-type{border-top:0}
+.faq b{display:block; font-size:14px; margin-bottom:5px}
+.faq p{margin:0; font-size:13px; color:var(--muted); line-height:1.8}
+.faq ul{margin:6px 0 0; padding-left:1.15em; font-size:13px; color:var(--muted); line-height:1.85}
+
+.toast{
+  position:fixed; left:50%; bottom:calc(var(--tabh) + 20px + env(safe-area-inset-bottom));
+  transform:translate(-50%,14px); z-index:80;
+  background:var(--ink); color:var(--paper); font-size:13px; font-weight:500;
+  padding:10px 16px; border-radius:99px; opacity:0; pointer-events:none; transition:.22s;
+  max-width:calc(100% - 32px); text-align:center;
+}
+.toast.on{opacity:1; transform:translate(-50%,0)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-in">
+    <div class="brand">手帳スキャン<small id="brandSub">紙の予定を、そのまま持ち歩く</small></div>
+    <button class="icon-btn" id="btnTheme" title="表示モード">
+      <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/><circle cx="12" cy="12" r="3.6"/></svg>
+    </button>
+    <button class="icon-btn" id="btnSettings" title="設定">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ============ 読み取り ============ -->
+  <section class="view on" id="view-scan">
+    <div class="sec">
+      <h2>手帳の写真</h2>
+      <div class="drop" id="drop">
+        <svg class="big" viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h3l1.2-1.8A1.5 1.5 0 0 1 10 3.5h4a1.5 1.5 0 0 1 1.3.7L16.5 6h3A1.5 1.5 0 0 1 21 7.5v10A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/><circle cx="12" cy="12" r="3.4"/></svg>
+        <p>見開き1ページずつ、正面から明るく撮ると精度が上がります</p>
+        <div class="btn-row">
+          <button class="btn primary" id="btnCamera">
+            <svg viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h3l1.2-1.8A1.5 1.5 0 0 1 10 3.5h4a1.5 1.5 0 0 1 1.3.7L16.5 6h3A1.5 1.5 0 0 1 21 7.5v10A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/><circle cx="12" cy="12" r="3.4"/></svg>
+            撮影する
+          </button>
+          <button class="btn" id="btnPick">
+            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M21 16l-5-5-6 6-2-2-5 5"/></svg>
+            写真を選ぶ
+          </button>
+        </div>
+        <input type="file" id="fileCam" accept="image/*" capture="environment" multiple class="sr">
+        <input type="file" id="filePick" accept="image/*" multiple class="sr">
+      </div>
+      <div class="shots" id="shots"></div>
+      <p class="hint" id="shotHint" hidden></p>
+    </div>
+
+    <div class="sec">
+      <h2>読み取りの手がかり</h2>
+      <div class="card" style="padding:13px 14px 3px">
+        <label class="f">
+          <span>この手帳のページはいつ頃か（年月の判断に使います）</span>
+          <input type="date" class="inp" id="baseDate">
+        </label>
+        <label class="f">
+          <span>補足（任意）</span>
+          <input type="text" class="inp" id="hintText" placeholder="例：左が週間バーチカル、右がメモ欄／赤字は仕事">
+        </label>
+      </div>
+    </div>
+
+    <div class="sec">
+      <button class="btn primary wide" id="btnAnalyze" style="padding:14px">
+        <svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4z"/><path d="M18 15l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg>
+        写真から予定を読み取る
+      </button>
+      <div id="progWrap"></div>
+      <p class="hint" id="analyzeHint">読み取りには Anthropic の API キーが必要です。<a href="#" id="lnkSettings">設定</a>から登録してください。画像はブラウザから直接 Anthropic へ送られ、このサイトのサーバーは経由しません。</p>
+    </div>
+
+    <div class="sec">
+      <h2>テキストから取り込む（APIキー不要）</h2>
+      <div class="card" style="padding:13px 14px">
+        <textarea class="inp" id="pasteBox" placeholder="9/11 10:00-11:30 定例会議 @第2会議室&#10;9/12 終日 出張（大阪）&#10;2026-09-14 19:00 歯医者"></textarea>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn" id="btnParseText">この文章を予定にする</button>
+        </div>
+        <p class="hint" style="margin-bottom:0">1行に1件。<code>日付 時刻 タイトル</code> の順なら、たいてい読み取れます。<code>@</code> の後ろは場所になります。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 予定 ============ -->
+  <section class="view" id="view-events">
+    <div class="listbar">
+      <div class="cnt"><em id="cntSel">0</em> / <span id="cntAll">0</span> 件を選択中</div>
+      <button class="mini" id="btnAll">全選択</button>
+      <button class="mini" id="btnNone">解除</button>
+      <button class="mini" id="btnAdd">＋追加</button>
+    </div>
+    <div id="pageNote"></div>
+    <div id="evList"></div>
+    <div class="sec" id="evFoot" hidden style="margin-top:20px">
+      <div class="btn-row">
+        <button class="btn danger" id="btnDelSel">選択した予定を消す</button>
+        <button class="btn ghost" id="btnClearAll">全部消してやり直す</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 書き出し ============ -->
+  <section class="view" id="view-export">
+    <div class="sec">
+      <h2>FirstSeed カレンダーへ追加</h2>
+      <div class="card" style="padding:15px 15px 6px">
+        <p style="margin:0 0 14px; font-size:13.5px; color:var(--muted); line-height:1.8">
+          選択した予定を <b style="color:var(--ink)">.ics ファイル</b>にして共有します。FirstSeed カレンダーは .ics を<b style="color:var(--ink)">追加で取り込む</b>ので、もともと入っている予定が消えることはありません。
+        </p>
+        <div class="btn-row" style="margin-bottom:10px">
+          <button class="btn primary wide" id="btnShare" style="padding:14px">
+            <svg viewBox="0 0 24 24"><path d="M12 16V4"/><path d="M8 8l4-4 4 4"/><path d="M4 14v4.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V14"/></svg>
+            共有して FirstSeed に送る
+          </button>
+        </div>
+        <div class="btn-row" style="margin-bottom:12px">
+          <button class="btn" id="btnDownload">.ics を保存</button>
+          <button class="btn" id="btnCopyText">予定をテキストでコピー</button>
+        </div>
+        <label class="f" style="margin-bottom:12px">
+          <span style="display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="ckSkipSent" style="width:17px;height:17px;accent-color:var(--ai)">
+            書き出し済みの予定は除く（二重登録よけ）
+          </span>
+        </label>
+      </div>
+      <p class="hint" id="exportCount"></p>
+    </div>
+
+    <div class="sec">
+      <h2>iPhone での取り込み手順</h2>
+      <div class="card" style="padding:15px 15px 3px">
+        <div class="step"><div class="no">1</div><div class="tx"><b>共有して FirstSeed に送る</b>を押します。共有シートが出ます。</div></div>
+        <div class="step"><div class="no">2</div><div class="tx">アプリの一覧から <b>FirstSeed カレンダー</b> を選びます。出てこないときは <b>その他</b>／<b>ファイルに保存</b> から保存して、ファイル App でタップし「FirstSeed カレンダーで開く」を選びます。</div></div>
+        <div class="step"><div class="no">3</div><div class="tx">FirstSeed 側で <b>取り込み先のカレンダー</b>を選んで確定します。既存の予定はそのまま残り、今回の分だけが足されます。</div></div>
+        <div class="step"><div class="no">4</div><div class="tx">戻ってきたら、この画面の <b>書き出し済みの予定は除く</b> をオンにしておくと、次に書き出すとき同じ予定を二度送らずに済みます。</div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h2>書き出す内容</h2>
+      <div class="outbox" id="preview">選択されている予定がありません。</div>
+    </div>
+  </section>
+
+  <!-- ============ 使い方 ============ -->
+  <section class="view" id="view-help">
+    <div class="sec">
+      <h2>使い方</h2>
+      <div class="card" style="padding:6px 15px">
+        <div class="faq"><b>1. 撮る</b><p>手帳を開いて、ページ全体が入るように真上から撮ります。影が落ちない明るさで、傾けずに。見開きは 1 ページずつ撮ったほうが読み取りは安定します。1 回に 8 枚まで送れます。</p></div>
+        <div class="faq"><b>2. 読み取る</b><p>「写真から予定を読み取る」を押すと、日付・時刻・内容を拾って一覧にします。週間バーチカル（縦軸が時刻）なら、ブロックの上端と下端から開始・終了時刻を推定します。</p></div>
+        <div class="faq"><b>3. 直す</b><p>手書きの読み取りは必ず間違えます。<span class="chip warn">要確認</span> が付いた予定は特に。予定タブでタップして直してください。ここでの手直しが、いちばん効きます。</p></div>
+        <div class="faq"><b>4. 送る</b><p>書き出しタブから .ics として共有し、FirstSeed カレンダーで取り込みます。<b>取り込みは「追加」なので、もとの予定は消えません。</b></p></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h2>API キーについて</h2>
+      <div class="card" style="padding:6px 15px">
+        <div class="faq"><b>なぜ必要なのか</b><p>手書き文字の読み取りは、このアプリだけでは行えません。画像は Anthropic の Claude に送って解析します。このサイトは GitHub Pages 上の静的ページで、預かるサーバーを持っていないため、鍵はあなた自身のものを使います。</p></div>
+        <div class="faq"><b>取得のしかた</b><p><a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> でアカウントを作り、API キーを発行します。従量課金で、手帳 1 ページあたりおおよそ 2〜6 円ほどです（Opus 5 の場合）。</p></div>
+        <div class="faq"><b>どこに保存されるか</b><p>キーはこの端末のブラウザ（localStorage）にだけ保存されます。設定で「この端末に保存する」を外すと、タブを閉じるまでの一時保存になります。送信先は <code>api.anthropic.com</code> だけです。</p></div>
+        <div class="faq"><b>キーを使わずに済ませたい</b><p>読み取りタブ下部の「テキストから取り込む」に予定を書き並べれば、キーなしでも .ics を作れます。ほかの OCR アプリで文字にしてから貼るのも手です。</p></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h2>よくあるところ</h2>
+      <div class="card" style="padding:6px 15px">
+        <div class="faq"><b>年がずれる</b><p>手帳には年が書かれていないことが多いので、「このページはいつ頃か」の日付を手がかりに推定します。年をまたぐページはここを合わせてから読み取ってください。</p></div>
+        <div class="faq"><b>同じ予定が二重に入った</b><p>FirstSeed 側では、取り込んだ予定を選んで削除できます。次からは「書き出し済みの予定は除く」をオンに。このアプリは一度送った予定に印を付けています。</p></div>
+        <div class="faq"><b>データはどこにあるか</b><p>読み取った予定はこの端末の localStorage にだけ残ります。写真はメモリ上だけで、保存も送信もされません（解析時に Anthropic へ送る場合を除く）。</p></div>
+      </div>
+    </div>
+    <p class="hint" style="text-align:center; margin-top:22px">
+      手帳スキャン — <a href="https://github.com/KURU77/techo-scan" target="_blank" rel="noopener">GitHub</a>
+    </p>
+  </section>
+
+</main>
+
+<nav class="tabs">
+  <div class="tabs-in">
+    <button class="tab on" data-view="scan">
+      <svg viewBox="0 0 24 24"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h3l1.2-1.8A1.5 1.5 0 0 1 10 3.5h4a1.5 1.5 0 0 1 1.3.7L16.5 6h3A1.5 1.5 0 0 1 21 7.5v10A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/><circle cx="12" cy="12" r="3.4"/></svg>
+      読み取り
+    </button>
+    <button class="tab" data-view="events">
+      <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+      予定<span class="badge" id="tabBadge" hidden>0</span>
+    </button>
+    <button class="tab" data-view="export">
+      <svg viewBox="0 0 24 24"><path d="M12 16V4"/><path d="M8 8l4-4 4 4"/><path d="M4 14v4.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V14"/></svg>
+      書き出し
+    </button>
+    <button class="tab" data-view="help">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.5"/><path d="M12 17h.01"/></svg>
+      使い方
+    </button>
+  </div>
+</nav>
+
+<div class="sheet-bg" id="sheetBg"></div>
+
+<!-- 予定の編集 -->
+<div class="sheet" id="sheetEdit">
+  <div class="grab"></div>
+  <div class="sheet-in">
+    <h3 id="editTitle">予定を直す</h3>
+    <label class="f"><span>タイトル</span><input type="text" class="inp" id="eTitle" placeholder="打ち合わせ"></label>
+    <div class="row2">
+      <label class="f"><span>日付</span><input type="date" class="inp" id="eDate"></label>
+      <label class="f"><span>終了日（複数日のとき）</span><input type="date" class="inp" id="eEndDate"></label>
+    </div>
+    <label class="f" style="margin-bottom:10px">
+      <span style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="eAllDay" style="width:17px;height:17px;accent-color:var(--ai)">終日の予定にする
+      </span>
+    </label>
+    <div class="row2" id="timeRow">
+      <label class="f"><span>開始</span><input type="time" class="inp" id="eStart"></label>
+      <label class="f"><span>終了</span><input type="time" class="inp" id="eEnd"></label>
+    </div>
+    <label class="f"><span>場所</span><input type="text" class="inp" id="eLoc" placeholder="第2会議室"></label>
+    <label class="f"><span>メモ</span><textarea class="inp" id="eNotes" style="min-height:64px"></textarea></label>
+    <div class="btn-row" style="margin:16px 0 8px">
+      <button class="btn primary" id="btnSaveEv" style="flex:2">保存する</button>
+      <button class="btn danger" id="btnDelEv">削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定 -->
+<div class="sheet" id="sheetSet">
+  <div class="grab"></div>
+  <div class="sheet-in">
+    <h3>設定</h3>
+    <label class="f">
+      <span>Anthropic API キー</span>
+      <input type="password" class="inp" id="sKey" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+    </label>
+    <label class="f" style="margin-top:-4px">
+      <span style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="sSaveKey" style="width:17px;height:17px;accent-color:var(--ai)">この端末に保存する
+      </span>
+    </label>
+    <p class="hint" style="margin:-4px 2px 16px">
+      キーは <code>api.anthropic.com</code> にしか送りません。発行は
+      <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic Console</a> から。
+    </p>
+    <div class="row2">
+      <label class="f">
+        <span>モデル</span>
+        <select class="inp" id="sModel">
+          <option value="claude-opus-5">Claude Opus 5（推奨・いちばん読める）</option>
+          <option value="claude-sonnet-5">Claude Sonnet 5（安い）</option>
+          <option value="claude-haiku-4-5">Claude Haiku 4.5（最安・活字向き）</option>
+        </select>
+      </label>
+      <label class="f">
+        <span>読み取りの丁寧さ</span>
+        <select class="inp" id="sEffort">
+          <option value="high">じっくり（既定）</option>
+          <option value="xhigh">とことん</option>
+          <option value="medium">ふつう</option>
+          <option value="low">さっと</option>
+        </select>
+      </label>
+    </div>
+    <div class="row2">
+      <label class="f">
+        <span>時刻がないときの所要時間</span>
+        <select class="inp" id="sDur">
+          <option value="30">30分</option><option value="60">1時間</option>
+          <option value="90">1時間30分</option><option value="120">2時間</option>
+        </select>
+      </label>
+      <label class="f">
+        <span>.ics のカレンダー名</span>
+        <input type="text" class="inp" id="sCalName" placeholder="手帳">
+      </label>
+    </div>
+    <label class="f">
+      <span>通知（アラーム）</span>
+      <select class="inp" id="sAlarm">
+        <option value="">付けない</option>
+        <option value="10">10分前</option>
+        <option value="30">30分前</option>
+        <option value="60">1時間前</option>
+        <option value="1440">前日の同時刻</option>
+      </select>
+    </label>
+    <div class="btn-row" style="margin:16px 0 8px">
+      <button class="btn primary" id="btnSaveSet" style="flex:2">保存する</button>
+      <button class="btn ghost" id="btnResetSent">書き出し済みの印を消す</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ==========================================================
+   0. 小道具
+   ========================================================== */
+var $ = function(s, r){ return (r||document).querySelector(s); };
+var $$ = function(s, r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
+var WD = ['日','月','火','水','木','金','土'];
+
+function pad2(n){ return (n<10?'0':'') + n; }
+function ymd(d){ return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate()); }
+function parseYMD(s){
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+  if(!m) return null;
+  var d = new Date(+m[1], +m[2]-1, +m[3]);
+  return isNaN(d) ? null : d;
+}
+function fmtDay(s){
+  var d = parseYMD(s); if(!d) return s;
+  return (d.getMonth()+1) + '月' + d.getDate() + '日';
+}
+function dowOf(s){ var d = parseYMD(s); return d ? d.getDay() : -1; }
+function addDays(s, n){
+  var d = parseYMD(s); if(!d) return s;
+  d.setDate(d.getDate() + n); return ymd(d);
+}
+function toMin(t){
+  var m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); if(!m) return null;
+  return (+m[1]) * 60 + (+m[2]);
+}
+function fromMin(v){ return pad2(Math.floor(v/60) % 24) + ':' + pad2(v % 60); }
+function uid(){
+  return 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+}
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+var toastT = null;
+function toast(msg){
+  var el = $('#toast'); el.textContent = msg; el.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(function(){ el.classList.remove('on'); }, 2400);
+}
+
+/* ==========================================================
+   1. 状態
+   ========================================================== */
+var LS_EV = 'techo.events.v1';
+var LS_SET = 'techo.settings.v1';
+var LS_KEY = 'techo.key.v1';
+var LS_THEME = 'techo.theme.v1';
+
+var DEFAULTS = {
+  model: 'claude-opus-5',
+  effort: 'high',
+  dur: 60,
+  calName: '手帳',
+  alarm: '',
+  saveKey: true,
+  skipSent: false
+};
+
+var S = {
+  events: [],
+  images: [],
+  set: Object.assign({}, DEFAULTS),
+  key: '',
+  pageNote: '',
+  busy: false
+};
+
+function load(){
+  try{
+    var e = JSON.parse(localStorage.getItem(LS_EV) || '[]');
+    if(Array.isArray(e)) S.events = e.filter(function(x){ return x && x.date; });
+  }catch(_){}
+  try{
+    var s = JSON.parse(localStorage.getItem(LS_SET) || '{}');
+    S.set = Object.assign({}, DEFAULTS, s || {});
+  }catch(_){}
+  try{ S.key = localStorage.getItem(LS_KEY) || ''; }catch(_){}
+}
+function saveEvents(){
+  try{ localStorage.setItem(LS_EV, JSON.stringify(S.events)); }catch(_){}
+}
+function saveSet(){
+  try{ localStorage.setItem(LS_SET, JSON.stringify(S.set)); }catch(_){}
+}
+
+/* ==========================================================
+   2. 予定モデル
+   ========================================================== */
+function normalize(raw, fallbackYear){
+  var ev = {
+    id: uid(),
+    uid: '',
+    date: '', endDate: '',
+    allDay: false,
+    start: '', end: '',
+    title: '', location: '', notes: '',
+    conf: 1, sent: 0, on: true
+  };
+  var date = String(raw.date || '').trim();
+  var m = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(date);
+  if(!m){
+    var m2 = /^(\d{1,2})[-/月](\d{1,2})/.exec(date);
+    if(m2) m = [null, String(fallbackYear), m2[1], m2[2]];
+  }
+  if(!m) return null;
+  ev.date = m[1] + '-' + pad2(+m[2]) + '-' + pad2(+m[3]);
+  if(!parseYMD(ev.date)) return null;
+
+  var ed = String(raw.endDate || '').trim();
+  var me = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(ed);
+  if(me){
+    var e2 = me[1] + '-' + pad2(+me[2]) + '-' + pad2(+me[3]);
+    if(e2 > ev.date) ev.endDate = e2;
+  }
+
+  ev.title = String(raw.title || '').trim().replace(/\s+/g, ' ') || '(無題)';
+  ev.location = String(raw.location || '').trim();
+  ev.notes = String(raw.notes || '').trim();
+  ev.conf = typeof raw.confidence === 'number' ? Math.max(0, Math.min(1, raw.confidence)) : 1;
+
+  var st = normTime(raw.start), en = normTime(raw.end);
+  if(raw.allDay === true || !st){
+    ev.allDay = true;
+  }else{
+    ev.start = st;
+    ev.end = en || fromMin(toMin(st) + (+S.set.dur || 60));
+    if(toMin(ev.end) === toMin(ev.start)) ev.end = fromMin(toMin(ev.start) + (+S.set.dur || 60));
+  }
+  ev.uid = 'techo-' + ev.id + '@kuru77.github.io';
+  return ev;
+}
+function normTime(t){
+  t = String(t == null ? '' : t).trim();
+  if(!t) return '';
+  t = t.replace(/[：]/g, ':').replace(/[時]/g, ':').replace(/分$/, '');
+  var m = /^(\d{1,2})\s*:\s*(\d{1,2})$/.exec(t);
+  if(!m){
+    var h = /^(\d{1,2})$/.exec(t);
+    if(h && +h[1] <= 24) return pad2(+h[1] % 24) + ':00';
+    var m4 = /^(\d{2})(\d{2})$/.exec(t);
+    if(m4) m = [null, m4[1], m4[2]];
+  }
+  if(!m) return '';
+  var hh = +m[1], mm = +m[2];
+  if(hh > 24 || mm > 59) return '';
+  return pad2(hh % 24) + ':' + pad2(mm);
+}
+function contentKey(ev){
+  return ev.date + '|' + (ev.allDay ? 'AD' : ev.start + '-' + ev.end) + '|' + ev.title.replace(/\s/g, '');
+}
+function sortEvents(){
+  S.events.sort(function(a, b){
+    if(a.date !== b.date) return a.date < b.date ? -1 : 1;
+    if(a.allDay !== b.allDay) return a.allDay ? -1 : 1;
+    if(a.start !== b.start) return a.start < b.start ? -1 : 1;
+    return a.title < b.title ? -1 : 1;
+  });
+}
+function addEvents(list){
+  var have = {};
+  S.events.forEach(function(e){ have[contentKey(e)] = 1; });
+  var added = 0, dup = 0;
+  list.forEach(function(e){
+    var k = contentKey(e);
+    if(have[k]){ dup++; return; }
+    have[k] = 1; S.events.push(e); added++;
+  });
+  sortEvents(); saveEvents(); renderEvents(); renderExport(); updateBadge();
+  return { added: added, dup: dup };
+}
+function selected(){
+  return S.events.filter(function(e){
+    if(!e.on) return false;
+    if(S.set.skipSent && e.sent) return false;
+    return true;
+  });
+}
+
+/* ==========================================================
+   3. 画面切り替え
+   ========================================================== */
+function show(name){
+  $$('.view').forEach(function(v){ v.classList.toggle('on', v.id === 'view-' + name); });
+  $$('.tab').forEach(function(t){ t.classList.toggle('on', t.dataset.view === name); });
+  window.scrollTo(0, 0);
+  if(name === 'export') renderExport();
+}
+$$('.tab').forEach(function(t){
+  t.addEventListener('click', function(){ show(t.dataset.view); });
+});
+function updateBadge(){
+  var b = $('#tabBadge'), n = S.events.length;
+  b.hidden = n === 0; b.textContent = n > 99 ? '99+' : n;
+}
+
+/* テーマ */
+function applyTheme(){
+  var t = '';
+  try{ t = localStorage.getItem(LS_THEME) || ''; }catch(_){}
+  if(t) document.documentElement.setAttribute('data-theme', t);
+  else document.documentElement.removeAttribute('data-theme');
+}
+$('#btnTheme').addEventListener('click', function(){
+  var cur = document.documentElement.getAttribute('data-theme') || '';
+  var next = cur === '' ? 'light' : (cur === 'light' ? 'dark' : '');
+  try{ next ? localStorage.setItem(LS_THEME, next) : localStorage.removeItem(LS_THEME); }catch(_){}
+  applyTheme();
+  toast(next === 'light' ? '明るい表示' : next === 'dark' ? '暗い表示' : '端末の設定に合わせます');
+});
+applyTheme();
+
+/* シート */
+function openSheet(id){
+  $('#sheetBg').classList.add('on'); $(id).classList.add('on');
+  document.body.style.overflow = 'hidden';
+}
+function closeSheets(){
+  $('#sheetBg').classList.remove('on');
+  $$('.sheet').forEach(function(s){ s.classList.remove('on'); });
+  document.body.style.overflow = '';
+}
+$('#sheetBg').addEventListener('click', closeSheets);
+
+/* ==========================================================
+   4. 画像の取り込み
+   ========================================================== */
+var MAX_IMG = 8, MAX_EDGE = 1568;
+
+$('#btnCamera').addEventListener('click', function(){ $('#fileCam').click(); });
+$('#btnPick').addEventListener('click', function(){ $('#filePick').click(); });
+$('#fileCam').addEventListener('change', function(e){ intake(e.target.files); e.target.value = ''; });
+$('#filePick').addEventListener('change', function(e){ intake(e.target.files); e.target.value = ''; });
+
+var drop = $('#drop');
+['dragenter','dragover'].forEach(function(t){
+  drop.addEventListener(t, function(e){ e.preventDefault(); drop.classList.add('over'); });
+});
+['dragleave','drop'].forEach(function(t){
+  drop.addEventListener(t, function(e){ e.preventDefault(); drop.classList.remove('over'); });
+});
+drop.addEventListener('drop', function(e){ if(e.dataTransfer) intake(e.dataTransfer.files); });
+document.addEventListener('paste', function(e){
+  if(!$('#view-scan').classList.contains('on')) return;
+  var items = e.clipboardData && e.clipboardData.files;
+  if(items && items.length) intake(items);
+});
+
+function intake(files){
+  var arr = Array.prototype.slice.call(files || []).filter(function(f){
+    return /^image\//.test(f.type) || /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name || '');
+  });
+  if(!arr.length) return;
+  var room = MAX_IMG - S.images.length;
+  if(room <= 0){ toast('一度に送れるのは ' + MAX_IMG + ' 枚までです'); return; }
+  arr.slice(0, room).forEach(function(f){
+    compress(f).then(function(im){
+      S.images.push(im); renderShots();
+    }).catch(function(){ toast('この画像は読み込めませんでした'); });
+  });
+  if(arr.length > room) toast(MAX_IMG + ' 枚を超えた分は取り込みませんでした');
+}
+
+function compress(file){
+  return new Promise(function(res, rej){
+    var url = URL.createObjectURL(file);
+    var done = function(bmpOrImg, w, h){
+      var scale = Math.min(1, MAX_EDGE / Math.max(w, h));
+      var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+      var cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+      var ctx = cv.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch);
+      ctx.drawImage(bmpOrImg, 0, 0, cw, ch);
+      var q = 0.85, dataUrl = cv.toDataURL('image/jpeg', q);
+      while(dataUrl.length > 4.4 * 1024 * 1024 && q > 0.4){
+        q -= 0.12; dataUrl = cv.toDataURL('image/jpeg', q);
+      }
+      URL.revokeObjectURL(url);
+      res({
+        id: uid(),
+        name: file.name || '写真',
+        dataUrl: dataUrl,
+        b64: dataUrl.slice(dataUrl.indexOf(',') + 1),
+        kb: Math.round(dataUrl.length * 0.75 / 1024)
+      });
+    };
+    if(window.createImageBitmap){
+      createImageBitmap(file, { imageOrientation: 'from-image' }).then(function(bmp){
+        done(bmp, bmp.width, bmp.height);
+      }).catch(function(){ viaImg(); });
+    }else viaImg();
+
+    function viaImg(){
+      var img = new Image();
+      img.onload = function(){ done(img, img.naturalWidth, img.naturalHeight); };
+      img.onerror = function(){ URL.revokeObjectURL(url); rej(); };
+      img.src = url;
+    }
+  });
+}
+
+function renderShots(){
+  var box = $('#shots');
+  box.innerHTML = S.images.map(function(im){
+    return '<div class="shot"><img src="' + im.dataUrl + '" alt="">' +
+      '<button class="x" data-del="' + im.id + '" aria-label="削除">×</button>' +
+      '<div class="kb">' + im.kb + 'KB</div></div>';
+  }).join('');
+  $$('[data-del]', box).forEach(function(b){
+    b.addEventListener('click', function(){
+      S.images = S.images.filter(function(x){ return x.id !== b.dataset.del; });
+      renderShots();
+    });
+  });
+  var h = $('#shotHint');
+  if(S.images.length){
+    h.hidden = false;
+    h.textContent = S.images.length + ' 枚（' + S.images.reduce(function(a, b){ return a + b.kb; }, 0) + 'KB）。まとめて 1 回で読み取ります。';
+  }else h.hidden = true;
+}
+
+/* ==========================================================
+   5. Claude で読み取る
+   ========================================================== */
+var API = 'https://api.anthropic.com/v1/messages';
+
+var SCHEMA = {
+  type: 'object',
+  properties: {
+    events: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          date: { type: 'string', description: 'YYYY-MM-DD 形式の開始日' },
+          endDate: { type: 'string', description: '複数日にまたがる場合の終了日。単日なら空文字' },
+          allDay: { type: 'boolean', description: '時刻が読み取れない／終日の予定なら true' },
+          start: { type: 'string', description: 'HH:MM。不明なら空文字' },
+          end: { type: 'string', description: 'HH:MM。不明なら空文字' },
+          title: { type: 'string', description: '予定の内容。簡潔に' },
+          location: { type: 'string', description: '場所。書かれていなければ空文字' },
+          notes: { type: 'string', description: '補足や、読み取りに自信のない箇所の注記。なければ空文字' },
+          confidence: { type: 'number', description: '読み取りの自信 0.0〜1.0' }
+        },
+        required: ['date','endDate','allDay','start','end','title','location','notes','confidence'],
+        additionalProperties: false
+      }
+    },
+    pageNote: { type: 'string', description: 'ページ全体についての気づき。特になければ空文字' }
+  },
+  required: ['events','pageNote'],
+  additionalProperties: false
+};
+
+var SYS = [
+  'あなたは日本語の紙の手帳（週間バーチカル、週間レフト、月間ブロック、デイリーなど）の写真から、',
+  '書き込まれた予定を正確に読み取って構造化する専門家です。',
+  '',
+  '守ること:',
+  '1. 実際に書かれているものだけを出力する。推測で予定を作らない。印刷された曜日・日付・時刻の目盛りそのものは予定ではない。',
+  '2. 日付は必ず YYYY-MM-DD。ページに印刷された年月・日付・曜日をまず読む。年の表記がなければ、',
+  '   利用者が指定した「基準日」に最も近くなる年を採る。曜日が読める場合は、日付と曜日が矛盾しない年を選ぶ。',
+  '3. 週間バーチカル（縦軸が時刻）では、書き込みブロックの上端を開始時刻、下端を終了時刻として読む。',
+  '   矢印や縦線で伸びている場合もその範囲を時刻とみなす。',
+  '4. 時刻が書かれていない、または読み取れない予定は allDay を true にし、start と end は空文字にする。',
+  '5. 終了時刻が書かれていない場合、end は空文字にする（勝手に長さを決めない）。',
+  '6. 「@」「＠」の後ろ、括弧内の地名・部屋名は location に入れる。それ以外の補足は notes に入れる。',
+  '7. 判読しづらい文字は最もありそうな候補を採り、その旨を notes に書いて confidence を下げる。',
+  '   まったく読めない部分は「?」で示す。読めない予定を捨てるより、confidence を下げて残すほうがよい。',
+  '8. 取り消し線で消されている予定は出力しない。',
+  '9. 複数日にまたがる線・矢印は、date に開始日、endDate に終了日を入れ allDay を true にする。',
+  '10. title からは装飾記号（★、♪、※ など）を落として簡潔にする。ただし意味を変えない。',
+  '',
+  '出力は指定されたスキーマの JSON だけ。前置きも説明も付けない。予定が 1 件も無ければ events は空配列にする。'
+].join('\n');
+
+function apiKey(){
+  var k = (S.key || '').trim();
+  return k;
+}
+
+$('#lnkSettings').addEventListener('click', function(e){ e.preventDefault(); openSettings(); });
+
+$('#btnAnalyze').addEventListener('click', analyze);
+
+function setProg(html){
+  $('#progWrap').innerHTML = html || '';
+}
+
+function analyze(){
+  if(S.busy) return;
+  if(!S.images.length){ toast('先に手帳の写真を追加してください'); return; }
+  if(!apiKey()){ toast('API キーを登録してください'); openSettings(); return; }
+
+  var base = $('#baseDate').value || ymd(new Date());
+  var baseD = parseYMD(base) || new Date();
+  var hint = $('#hintText').value.trim();
+
+  var content = [];
+  S.images.forEach(function(im, i){
+    content.push({ type: 'text', text: '【画像' + (i + 1) + '】' });
+    content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: im.b64 } });
+  });
+  content.push({ type: 'text', text: [
+    'この手帳の写真から予定を読み取ってください。',
+    '基準日: ' + base + '（' + WD[baseD.getDay()] + '曜日）。年の表記がないときはこの日付に最も近い年として解釈してください。',
+    '今日の日付: ' + ymd(new Date()) + '。',
+    hint ? '利用者からの補足: ' + hint : ''
+  ].filter(Boolean).join('\n') });
+
+  var body = {
+    model: S.set.model,
+    max_tokens: 32000,
+    stream: true,
+    system: SYS,
+    messages: [{ role: 'user', content: content }],
+    output_config: { format: { type: 'json_schema', schema: SCHEMA } }
+  };
+  if(S.set.model !== 'claude-haiku-4-5') body.output_config.effort = S.set.effort;
+
+  S.busy = true;
+  $('#btnAnalyze').disabled = true;
+  setProg('<div class="prog"><div id="progTx">画像を送っています…</div><div class="bar"><i></i></div></div>');
+
+  var t0 = Date.now(), usage = { i: 0, o: 0 };
+
+  fetch(API, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': apiKey(),
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify(body)
+  }).then(function(res){
+    if(!res.ok){
+      return res.text().then(function(t){ throw new Error(httpMsg(res.status, t)); });
+    }
+    if(!res.body) return res.text().then(function(t){ return pickText(JSON.parse(t)); });
+    return readStream(res, usage);
+  }).then(function(text){
+    var data = parseJSON(text);
+    if(!data || !Array.isArray(data.events)) throw new Error('読み取り結果を解釈できませんでした。もう一度お試しください。');
+    var year = baseD.getFullYear();
+    var list = data.events.map(function(r){ return normalize(r, year); }).filter(Boolean);
+    S.pageNote = String(data.pageNote || '').trim();
+    var r = addEvents(list);
+
+    var sec = Math.round((Date.now() - t0) / 1000);
+    var cost = estCost(usage);
+    setProg('');
+    if(!list.length){
+      setProg('<div class="errbox"><b>予定が見つかりませんでした</b>' +
+        'ページ全体が入るように、明るいところで撮り直してみてください。' +
+        (S.pageNote ? '<br>読み取りメモ: ' + esc(S.pageNote) : '') + '</div>');
+    }else{
+      toast(r.added + ' 件を追加' + (r.dup ? '（' + r.dup + ' 件は重複のため除外）' : ''));
+      show('events');
+    }
+    $('#brandSub').textContent = sec + '秒 / 約' + cost;
+  }).catch(function(err){
+    setProg('<div class="errbox"><b>読み取れませんでした</b>' + esc(err.message || String(err)) + '</div>');
+  }).then(function(){
+    S.busy = false; $('#btnAnalyze').disabled = false;
+  });
+}
+
+function readStream(res, usage){
+  var reader = res.body.getReader(), dec = new TextDecoder();
+  var buf = '', text = '', err = null;
+  function step(){
+    return reader.read().then(function(r){
+      if(r.done) return;
+      buf += dec.decode(r.value, { stream: true });
+      var i;
+      while((i = buf.indexOf('\n')) >= 0){
+        var line = buf.slice(0, i).replace(/\r$/, '');
+        buf = buf.slice(i + 1);
+        if(line.indexOf('data:') !== 0) continue;
+        var raw = line.slice(5).trim();
+        if(!raw) continue;
+        var ev; try{ ev = JSON.parse(raw); }catch(_){ continue; }
+        if(ev.type === 'error'){ err = new Error((ev.error && ev.error.message) || 'API エラー'); continue; }
+        if(ev.type === 'message_start' && ev.message && ev.message.usage){
+          usage.i = ev.message.usage.input_tokens || 0;
+        }
+        if(ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta'){
+          text += ev.delta.text;
+          var n = (text.match(/"title"/g) || []).length;
+          var tx = $('#progTx');
+          if(tx) tx.textContent = n ? ('読み取り中… ' + n + ' 件目') : '手帳を読んでいます…';
+        }
+        if(ev.type === 'message_delta' && ev.usage){ usage.o = ev.usage.output_tokens || 0; }
+      }
+      return step();
+    });
+  }
+  return step().then(function(){
+    if(err) throw err;
+    return text;
+  });
+}
+
+function pickText(json){
+  if(!json || !Array.isArray(json.content)) return '';
+  for(var i = 0; i < json.content.length; i++){
+    if(json.content[i].type === 'text') return json.content[i].text;
+  }
+  return '';
+}
+
+function parseJSON(text){
+  text = String(text || '').trim();
+  if(!text) return null;
+  try{ return JSON.parse(text); }catch(_){}
+  var f = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  try{ return JSON.parse(f); }catch(_){}
+  var a = text.indexOf('{'), b = text.lastIndexOf('}');
+  if(a >= 0 && b > a){
+    try{ return JSON.parse(text.slice(a, b + 1)); }catch(_){}
+  }
+  return null;
+}
+
+function httpMsg(status, body){
+  var detail = '';
+  try{
+    var j = JSON.parse(body);
+    detail = (j.error && j.error.message) || '';
+  }catch(_){ detail = (body || '').slice(0, 200); }
+  if(status === 401) return 'API キーが受け付けられませんでした。設定を見直してください。';
+  if(status === 403) return 'このキーでは利用できませんでした。' + detail;
+  if(status === 400) return 'リクエストが通りませんでした。' + detail;
+  if(status === 413) return '画像が大きすぎます。枚数を減らして試してください。';
+  if(status === 429) return '一時的に上限に達しました。少し待ってからもう一度お試しください。';
+  if(status >= 500) return 'Anthropic 側が混み合っています。少し待ってからもう一度お試しください。';
+  return 'エラー (' + status + ') ' + detail;
+}
+
+var PRICE = {
+  'claude-opus-5': [5, 25],
+  'claude-sonnet-5': [2, 10],
+  'claude-haiku-4-5': [1, 5]
+};
+function estCost(u){
+  var p = PRICE[S.set.model] || PRICE['claude-opus-5'];
+  var usd = (u.i / 1e6) * p[0] + (u.o / 1e6) * p[1];
+  if(!usd) return '—';
+  return '$' + (usd < 0.01 ? usd.toFixed(4) : usd.toFixed(3));
+}
+
+/* ==========================================================
+   6. テキストから取り込む
+   ========================================================== */
+$('#btnParseText').addEventListener('click', function(){
+  var raw = $('#pasteBox').value;
+  if(!raw.trim()){ toast('文章を貼り付けてください'); return; }
+  var base = parseYMD($('#baseDate').value) || new Date();
+  var list = parseLines(raw, base);
+  if(!list.length){ toast('予定として読み取れる行がありませんでした'); return; }
+  var r = addEvents(list);
+  $('#pasteBox').value = '';
+  toast(r.added + ' 件を追加' + (r.dup ? '（' + r.dup + ' 件は重複）' : ''));
+  show('events');
+});
+
+function parseLines(raw, base){
+  var year = base.getFullYear(), out = [], curDate = '';
+  raw.split(/\r?\n/).forEach(function(line){
+    var s = line.trim();
+    if(!s) return;
+    s = s.replace(/^[-・*•\s]+/, '');
+
+    var date = '';
+    var m = /^(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?/.exec(s);
+    if(m){ date = m[1] + '-' + pad2(+m[2]) + '-' + pad2(+m[3]); s = s.slice(m[0].length); }
+    else{
+      m = /^(\d{1,2})[-/.月](\d{1,2})日?/.exec(s);
+      if(m){ date = year + '-' + pad2(+m[1]) + '-' + pad2(+m[2]); s = s.slice(m[0].length); }
+    }
+    if(date) curDate = date;
+    if(!curDate) return;
+    s = s.replace(/^\s*[（(]?[日月火水木金土][）)]?\s*/, '').trim();
+    s = s.replace(/^[-–—:：]\s*/, '');
+
+    var allDay = false, st = '', en = '';
+    if(/^(終日|一日|終日:)/.test(s)){ allDay = true; s = s.replace(/^(終日|一日|終日:)\s*/, ''); }
+    else{
+      var t = /^(\d{1,2}[:：]\d{2}|\d{1,2}時(?:\d{1,2}分?)?)\s*(?:[-–—~〜ー]\s*(\d{1,2}[:：]\d{2}|\d{1,2}時(?:\d{1,2}分?)?))?/.exec(s);
+      if(t){
+        st = normTime(t[1].replace(/時(\d+)分?/, ':$1').replace(/時$/, ':00'));
+        if(t[2]) en = normTime(t[2].replace(/時(\d+)分?/, ':$1').replace(/時$/, ':00'));
+        s = s.slice(t[0].length).trim();
+      }else allDay = true;
+    }
+    s = s.replace(/^[-–—:：]\s*/, '').trim();
+    if(!s) return;
+
+    var loc = '';
+    var at = /[@＠]\s*([^@＠]+)$/.exec(s);
+    if(at){ loc = at[1].trim(); s = s.slice(0, at.index).trim(); }
+    if(!s) return;
+
+    var ev = normalize({
+      date: curDate, allDay: allDay, start: st, end: en,
+      title: s, location: loc, notes: '', confidence: 1
+    }, year);
+    if(ev) out.push(ev);
+  });
+  return out;
+}
+
+/* ==========================================================
+   7. 予定一覧
+   ========================================================== */
+var CK_SVG = '<svg viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7"/></svg>';
+
+function renderEvents(){
+  var box = $('#evList');
+  $('#pageNote').innerHTML = S.pageNote
+    ? '<div class="prog" style="margin:0 0 14px"><b>読み取りメモ</b><br>' + esc(S.pageNote) + '</div>' : '';
+
+  if(!S.events.length){
+    box.innerHTML = '<div class="empty"><b>まだ予定がありません</b>読み取りタブから手帳の写真を送るか、<br>文章を貼り付けて取り込んでください。</div>';
+    $('#evFoot').hidden = true;
+    $('#cntSel').textContent = '0'; $('#cntAll').textContent = '0';
+    return;
+  }
+  $('#evFoot').hidden = false;
+
+  var groups = [], gi = {};
+  S.events.forEach(function(e){
+    if(!gi[e.date]){ gi[e.date] = { date: e.date, items: [] }; groups.push(gi[e.date]); }
+    gi[e.date].items.push(e);
+  });
+
+  box.innerHTML = groups.map(function(g){
+    var w = dowOf(g.date);
+    var cls = w === 0 ? ' sun' : (w === 6 ? ' sat' : '');
+    return '<div class="daygrp">' +
+      '<div class="dayhead' + cls + '"><span class="d">' + fmtDay(g.date) + '</span>' +
+      '<span class="w">' + (w >= 0 ? WD[w] + '曜' : '') + '</span>' +
+      '<span class="n">' + g.items.length + '</span></div>' +
+      g.items.map(evHTML).join('') +
+      '</div>';
+  }).join('');
+
+  $$('[data-ck]', box).forEach(function(b){
+    b.addEventListener('click', function(){
+      var e = byId(b.dataset.ck); if(!e) return;
+      e.on = !e.on; saveEvents(); renderEvents(); renderExport();
+    });
+  });
+  $$('[data-edit]', box).forEach(function(b){
+    b.addEventListener('click', function(){ openEdit(b.dataset.edit); });
+  });
+
+  var sel = selected().length;
+  $('#cntSel').textContent = sel; $('#cntAll').textContent = S.events.length;
+}
+
+function evHTML(e){
+  var time = e.allDay
+    ? (e.endDate ? '終日 ' + fmtDay(e.date) + '〜' + fmtDay(e.endDate) : '終日')
+    : e.start + ' – ' + e.end;
+  var meta = [];
+  if(e.location) meta.push('📍 ' + esc(e.location));
+  if(e.notes) meta.push(esc(e.notes));
+  var tags = '';
+  if(e.conf < 0.72) tags += '<span class="chip warn">要確認</span>';
+  if(e.sent) tags += '<span class="chip ok">書き出し済み</span>';
+  return '<div class="ev' + (e.on ? '' : ' off') + (e.sent ? ' sent' : '') + '">' +
+    '<button class="ck" data-ck="' + e.id + '" role="checkbox" aria-checked="' + (e.on ? 'true' : 'false') + '" aria-label="選択">' + CK_SVG + '</button>' +
+    '<button class="ev-body" data-edit="' + e.id + '">' +
+      '<div class="ev-time' + (e.allDay ? ' allday' : '') + '">' + esc(time) + '</div>' +
+      '<div class="ev-title">' + esc(e.title) + '</div>' +
+      (meta.length ? '<div class="ev-meta">' + meta.join('　') + '</div>' : '') +
+      (tags ? '<div class="ev-tags">' + tags + '</div>' : '') +
+    '</button></div>';
+}
+
+function byId(id){
+  for(var i = 0; i < S.events.length; i++) if(S.events[i].id === id) return S.events[i];
+  return null;
+}
+
+$('#btnAll').addEventListener('click', function(){
+  S.events.forEach(function(e){ e.on = true; }); saveEvents(); renderEvents(); renderExport();
+});
+$('#btnNone').addEventListener('click', function(){
+  S.events.forEach(function(e){ e.on = false; }); saveEvents(); renderEvents(); renderExport();
+});
+$('#btnDelSel').addEventListener('click', function(){
+  var n = S.events.filter(function(e){ return e.on; }).length;
+  if(!n){ toast('選択されていません'); return; }
+  if(!confirm(n + ' 件を消します。よろしいですか？')) return;
+  S.events = S.events.filter(function(e){ return !e.on; });
+  saveEvents(); renderEvents(); renderExport(); updateBadge(); toast(n + ' 件を消しました');
+});
+$('#btnClearAll').addEventListener('click', function(){
+  if(!S.events.length) return;
+  if(!confirm('読み取った予定をすべて消します。よろしいですか？')) return;
+  S.events = []; S.pageNote = '';
+  saveEvents(); renderEvents(); renderExport(); updateBadge(); toast('消しました');
+});
+$('#btnAdd').addEventListener('click', function(){ openEdit(null); });
+
+/* ---- 編集シート ---- */
+var editing = null;
+function openEdit(id){
+  var e = id ? byId(id) : null;
+  editing = e ? e.id : null;
+  $('#editTitle').textContent = e ? '予定を直す' : '予定を足す';
+  $('#btnDelEv').style.display = e ? '' : 'none';
+  var base = e || {
+    date: $('#baseDate').value || ymd(new Date()),
+    endDate: '', allDay: false, start: '09:00', end: '10:00',
+    title: '', location: '', notes: ''
+  };
+  $('#eTitle').value = base.title || '';
+  $('#eDate').value = base.date || '';
+  $('#eEndDate').value = base.endDate || '';
+  $('#eAllDay').checked = !!base.allDay;
+  $('#eStart').value = base.start || '09:00';
+  $('#eEnd').value = base.end || '10:00';
+  $('#eLoc').value = base.location || '';
+  $('#eNotes').value = base.notes || '';
+  syncAllDay();
+  openSheet('#sheetEdit');
+  setTimeout(function(){ if(!e) $('#eTitle').focus(); }, 260);
+}
+function syncAllDay(){ $('#timeRow').style.display = $('#eAllDay').checked ? 'none' : ''; }
+$('#eAllDay').addEventListener('change', syncAllDay);
+
+$('#btnSaveEv').addEventListener('click', function(){
+  var d = $('#eDate').value;
+  if(!parseYMD(d)){ toast('日付を入れてください'); return; }
+  var title = $('#eTitle').value.trim() || '(無題)';
+  var allDay = $('#eAllDay').checked;
+  var st = allDay ? '' : normTime($('#eStart').value);
+  var en = allDay ? '' : normTime($('#eEnd').value);
+  if(!allDay && !st){ toast('開始時刻を入れてください'); return; }
+  if(!allDay && !en) en = fromMin(toMin(st) + (+S.set.dur || 60));
+  var ed = $('#eEndDate').value;
+  if(ed && !(parseYMD(ed) && ed > d)) ed = '';
+
+  var e = editing ? byId(editing) : null;
+  if(!e){
+    e = normalize({ date: d, allDay: allDay, start: st, end: en, title: title, confidence: 1 }, parseYMD(d).getFullYear());
+    if(!e){ toast('保存できませんでした'); return; }
+    S.events.push(e);
+  }
+  e.date = d; e.endDate = ed; e.allDay = allDay;
+  e.start = allDay ? '' : st; e.end = allDay ? '' : en;
+  e.title = title;
+  e.location = $('#eLoc').value.trim();
+  e.notes = $('#eNotes').value.trim();
+  e.conf = 1; e.on = true;
+  sortEvents(); saveEvents(); renderEvents(); renderExport(); updateBadge();
+  closeSheets(); toast('保存しました');
+});
+$('#btnDelEv').addEventListener('click', function(){
+  if(!editing) return;
+  S.events = S.events.filter(function(e){ return e.id !== editing; });
+  saveEvents(); renderEvents(); renderExport(); updateBadge();
+  closeSheets(); toast('消しました');
+});
+
+/* ==========================================================
+   8. .ics を作る
+   ========================================================== */
+function icsEsc(s){
+  return String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+/* RFC 5545 の 75 オクテット折り返し。日本語があるのでバイト数で数える。 */
+var ENC = window.TextEncoder ? new TextEncoder() : null;
+function blen(ch){
+  if(!ENC){ var c = ch.codePointAt(0); return c < 0x80 ? 1 : (c < 0x800 ? 2 : (c < 0x10000 ? 3 : 4)); }
+  return ENC.encode(ch).length;
+}
+function fold(line){
+  var out = [], cur = '', len = 0, max = 73;
+  var chars = Array.from ? Array.from(line) : line.split('');
+  for(var i = 0; i < chars.length; i++){
+    var n = blen(chars[i]);
+    if(len + n > max){ out.push(cur); cur = ''; len = 0; max = 72; }
+    cur += chars[i]; len += n;
+  }
+  out.push(cur);
+  return out.join('\r\n ');
+}
+function stampUTC(d){
+  return d.getUTCFullYear() + pad2(d.getUTCMonth()+1) + pad2(d.getUTCDate()) + 'T' +
+         pad2(d.getUTCHours()) + pad2(d.getUTCMinutes()) + pad2(d.getUTCSeconds()) + 'Z';
+}
+function dtLocal(date, time){
+  return date.replace(/-/g, '') + 'T' + time.replace(':', '') + '00';
+}
+
+function buildICS(list){
+  var now = stampUTC(new Date());
+  var L = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//KURU77//techo-scan//JA',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'X-WR-CALNAME:' + icsEsc(S.set.calName || '手帳'),
+    'X-WR-TIMEZONE:Asia/Tokyo',
+    'BEGIN:VTIMEZONE',
+    'TZID:Asia/Tokyo',
+    'BEGIN:STANDARD',
+    'DTSTART:19700101T000000',
+    'TZOFFSETFROM:+0900',
+    'TZOFFSETTO:+0900',
+    'TZNAME:JST',
+    'END:STANDARD',
+    'END:VTIMEZONE'
+  ];
+
+  list.forEach(function(e){
+    L.push('BEGIN:VEVENT');
+    L.push('UID:' + (e.uid || ('techo-' + e.id + '@kuru77.github.io')));
+    L.push('DTSTAMP:' + now);
+    if(e.allDay){
+      var last = e.endDate && e.endDate > e.date ? e.endDate : e.date;
+      L.push('DTSTART;VALUE=DATE:' + e.date.replace(/-/g, ''));
+      L.push('DTEND;VALUE=DATE:' + addDays(last, 1).replace(/-/g, ''));
+    }else{
+      var endDate = e.date;
+      if(toMin(e.end) <= toMin(e.start)) endDate = addDays(e.date, 1);
+      L.push('DTSTART;TZID=Asia/Tokyo:' + dtLocal(e.date, e.start));
+      L.push('DTEND;TZID=Asia/Tokyo:' + dtLocal(endDate, e.end));
+    }
+    L.push('SUMMARY:' + icsEsc(e.title));
+    if(e.location) L.push('LOCATION:' + icsEsc(e.location));
+    var desc = [];
+    if(e.notes) desc.push(e.notes);
+    if(e.conf < 0.72) desc.push('※ 手帳からの読み取りに自信のない箇所があります');
+    desc.push('手帳スキャンから取り込み');
+    L.push('DESCRIPTION:' + icsEsc(desc.join('\n')));
+    if(e.conf < 0.72) L.push('CATEGORIES:要確認');
+    L.push('TRANSP:' + (e.allDay ? 'TRANSPARENT' : 'OPAQUE'));
+    L.push('SEQUENCE:0');
+    var al = +S.set.alarm;
+    if(al > 0 && !e.allDay){
+      L.push('BEGIN:VALARM');
+      L.push('ACTION:DISPLAY');
+      L.push('DESCRIPTION:' + icsEsc(e.title));
+      L.push('TRIGGER:-PT' + (al >= 60 && al % 60 === 0 ? (al / 60) + 'H' : al + 'M'));
+      L.push('END:VALARM');
+    }
+    L.push('END:VEVENT');
+  });
+
+  L.push('END:VCALENDAR');
+  return L.map(fold).join('\r\n') + '\r\n';
+}
+
+function buildText(list){
+  if(!list.length) return '';
+  var out = [], last = '';
+  list.forEach(function(e){
+    if(e.date !== last){
+      if(last) out.push('');
+      var w = dowOf(e.date);
+      out.push(e.date + ' (' + (w >= 0 ? WD[w] : '?') + ')');
+      last = e.date;
+    }
+    var t = e.allDay ? '終日        ' : (e.start + '-' + e.end);
+    var line = '  ' + t + '  ' + e.title;
+    if(e.location) line += ' @' + e.location;
+    if(e.allDay && e.endDate) line += '（〜' + e.endDate + '）';
+    out.push(line);
+    if(e.notes) out.push('              ' + e.notes);
+  });
+  return out.join('\n');
+}
+
+function icsFileName(){
+  var d = new Date();
+  return 'techo-' + d.getFullYear() + pad2(d.getMonth()+1) + pad2(d.getDate()) +
+         '-' + pad2(d.getHours()) + pad2(d.getMinutes()) + '.ics';
+}
+
+/* ==========================================================
+   9. 書き出しタブ
+   ========================================================== */
+$('#ckSkipSent').addEventListener('change', function(){
+  S.set.skipSent = this.checked; saveSet(); renderExport(); renderEvents();
+});
+
+function renderExport(){
+  var list = selected();
+  $('#ckSkipSent').checked = !!S.set.skipSent;
+  var sent = S.events.filter(function(e){ return e.sent; }).length;
+  $('#exportCount').textContent = list.length
+    ? list.length + ' 件を書き出します。' + (sent ? '（うち書き出し済み ' + sent + ' 件が全体にあります）' : '')
+    : '書き出す予定がありません。予定タブで選んでください。';
+  $('#preview').textContent = list.length ? buildText(list) : '選択されている予定がありません。';
+  var no = list.length === 0;
+  ['#btnShare','#btnDownload','#btnCopyText'].forEach(function(s){ $(s).disabled = no; });
+  $('#cntSel').textContent = list.length;
+}
+
+function markSent(list){
+  var now = Date.now();
+  list.forEach(function(e){ e.sent = now; });
+  saveEvents(); renderEvents(); renderExport();
+}
+
+$('#btnShare').addEventListener('click', function(){
+  var list = selected(); if(!list.length) return;
+  var text = buildICS(list);
+  var name = icsFileName();
+  var file = null;
+  try{ file = new File([text], name, { type: 'text/calendar' }); }catch(_){}
+
+  if(file && navigator.canShare && navigator.canShare({ files: [file] })){
+    navigator.share({ files: [file], title: S.set.calName || '手帳' }).then(function(){
+      markSent(list); toast('送りました。FirstSeed 側で取り込み先を選んでください');
+    }).catch(function(err){
+      if(err && err.name === 'AbortError') return;
+      downloadICS(text, name, list);
+    });
+  }else{
+    toast('共有に対応していないため、ファイルとして保存します');
+    downloadICS(text, name, list);
+  }
+});
+
+$('#btnDownload').addEventListener('click', function(){
+  var list = selected(); if(!list.length) return;
+  downloadICS(buildICS(list), icsFileName(), list);
+});
+
+function downloadICS(text, name, list){
+  var blob = new Blob(['﻿' + text], { type: 'text/calendar;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = name; a.rel = 'noopener';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 1500);
+  markSent(list);
+  toast('.ics を保存しました');
+}
+
+$('#btnCopyText').addEventListener('click', function(){
+  var list = selected(); if(!list.length) return;
+  var t = buildText(list);
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(function(){ toast('コピーしました'); },
+      function(){ fallbackCopy(t); });
+  }else fallbackCopy(t);
+});
+function fallbackCopy(t){
+  var ta = document.createElement('textarea');
+  ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); toast('コピーしました'); }
+  catch(_){ toast('コピーできませんでした'); }
+  document.body.removeChild(ta);
+}
+
+/* ==========================================================
+   10. 設定
+   ========================================================== */
+$('#btnSettings').addEventListener('click', openSettings);
+function openSettings(){
+  $('#sKey').value = S.key || '';
+  $('#sSaveKey').checked = S.set.saveKey !== false;
+  $('#sModel').value = S.set.model;
+  $('#sEffort').value = S.set.effort;
+  $('#sDur').value = String(S.set.dur);
+  $('#sCalName').value = S.set.calName;
+  $('#sAlarm').value = S.set.alarm || '';
+  openSheet('#sheetSet');
+}
+$('#btnSaveSet').addEventListener('click', function(){
+  S.key = $('#sKey').value.trim();
+  S.set.saveKey = $('#sSaveKey').checked;
+  S.set.model = $('#sModel').value;
+  S.set.effort = $('#sEffort').value;
+  S.set.dur = +$('#sDur').value || 60;
+  S.set.calName = $('#sCalName').value.trim() || '手帳';
+  S.set.alarm = $('#sAlarm').value;
+  saveSet();
+  try{
+    if(S.set.saveKey && S.key) localStorage.setItem(LS_KEY, S.key);
+    else localStorage.removeItem(LS_KEY);
+  }catch(_){}
+  closeSheets(); toast('保存しました');
+  $('#analyzeHint').style.opacity = S.key ? '.6' : '1';
+});
+$('#btnResetSent').addEventListener('click', function(){
+  if(!confirm('「書き出し済み」の印をすべて消します。よろしいですか？')) return;
+  S.events.forEach(function(e){ e.sent = 0; });
+  saveEvents(); renderEvents(); renderExport(); toast('印を消しました');
+});
+
+/* ==========================================================
+   11. 起動
+   ========================================================== */
+load();
+$('#baseDate').value = ymd(new Date());
+renderShots();
+renderEvents();
+renderExport();
+updateBadge();
+if(S.key) $('#analyzeHint').style.opacity = '.6';
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
+
+})();
+</script>
+</body>
+</html>
