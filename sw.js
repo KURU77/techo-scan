@@ -1,7 +1,7 @@
 /* 手帳スキャン — オフライン用サービスワーカー
    HTML はネットワーク優先（更新をすぐ反映）、それ以外はキャッシュ優先。
-   api.anthropic.com への通信は一切キャッシュしない。 */
-var CACHE = 'techo-scan-v1';
+   API（Anthropic / Gemini）への通信は一切キャッシュしない。 */
+var CACHE = 'techo-scan-v2';
 var ASSETS = [
   './',
   './index.html',
@@ -31,7 +31,7 @@ self.addEventListener('fetch', function(e){
 
   var url = new URL(req.url);
   /* API 呼び出しには触らない */
-  if(url.hostname === 'api.anthropic.com') return;
+  if(url.hostname === 'api.anthropic.com' || url.hostname === 'generativelanguage.googleapis.com') return;
 
   var sameOrigin = url.origin === self.location.origin;
   var wantsHTML = req.mode === 'navigate' ||

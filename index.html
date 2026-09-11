@@ -279,6 +279,14 @@ textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
 .step .tx{font-size:13.5px; line-height:1.75; color:var(--muted)}
 .step .tx b{color:var(--ink)}
 
+.grow{display:flex; align-items:center; gap:10px; padding:9px 0; border-top:1px solid var(--line-soft)}
+.grow:first-child{border-top:0}
+.grow .gt{flex:1; min-width:0; font-size:13px; line-height:1.45}
+.grow .gt b{display:block; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.grow .gt span{color:var(--muted); font-family:var(--f-mono); font-size:11px}
+.grow .btn{padding:7px 12px; font-size:12.5px; flex:none; text-decoration:none}
+.grow.sent .gt{opacity:.55}
+
 .faq{border-top:1px solid var(--line-soft); padding:13px 2px}
 .faq:first-of-type{border-top:0}
 .faq b{display:block; font-size:14px; margin-bottom:5px}
@@ -356,7 +364,7 @@ textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
         写真から予定を読み取る
       </button>
       <div id="progWrap"></div>
-      <p class="hint" id="analyzeHint">読み取りには Anthropic の API キーが必要です。<a href="#" id="lnkSettings">設定</a>から登録してください。画像はブラウザから直接 Anthropic へ送られ、このサイトのサーバーは経由しません。</p>
+      <p class="hint" id="analyzeHint">読み取りには Google Gemini（無料枠あり）か Anthropic Claude の API キーが必要です。<a href="#" id="lnkSettings">設定</a>から登録してください。画像はブラウザから直接それぞれの API へ送られ、このサイトのサーバーは経由しません。</p>
     </div>
 
     <div class="sec">
@@ -428,6 +436,22 @@ textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
     </div>
 
     <div class="sec">
+      <h2>Google カレンダーへ追加</h2>
+      <div class="card" style="padding:15px 15px 6px">
+        <p style="margin:0 0 12px; font-size:13.5px; color:var(--muted); line-height:1.8">
+          Google カレンダーは <b style="color:var(--ink)">1 件ずつ</b>「開く」で登録画面に飛ばせます（Google カレンダーの App かブラウザが開くので、内容を確認して保存）。まとめて入れたいときは、上の <b style="color:var(--ink)">.ics を保存</b> してから Google カレンダーの設定 →「インポート」で読み込むと一括で入ります。どちらも追加だけで、既存の予定には触りません。
+        </p>
+        <div class="btn-row" style="margin-bottom:12px">
+          <a class="btn" href="https://calendar.google.com/calendar/u/0/r/settings/export" target="_blank" rel="noopener" style="text-decoration:none">
+            <svg viewBox="0 0 24 24"><path d="M12 4v12"/><path d="M8 12l4 4 4-4"/><path d="M4 18v1.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V18"/></svg>
+            インポート画面を開く
+          </a>
+        </div>
+        <div id="gcalList"></div>
+      </div>
+    </div>
+
+    <div class="sec">
       <h2>書き出す内容</h2>
       <div class="outbox" id="preview">選択されている予定がありません。</div>
     </div>
@@ -441,16 +465,17 @@ textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
         <div class="faq"><b>1. 撮る</b><p>手帳を開いて、ページ全体が入るように真上から撮ります。影が落ちない明るさで、傾けずに。見開きは 1 ページずつ撮ったほうが読み取りは安定します。1 回に 8 枚まで送れます。</p></div>
         <div class="faq"><b>2. 読み取る</b><p>「写真から予定を読み取る」を押すと、日付・時刻・内容を拾って一覧にします。週間バーチカル（縦軸が時刻）なら、ブロックの上端と下端から開始・終了時刻を推定します。</p></div>
         <div class="faq"><b>3. 直す</b><p>手書きの読み取りは必ず間違えます。<span class="chip warn">要確認</span> が付いた予定は特に。予定タブでタップして直してください。ここでの手直しが、いちばん効きます。</p></div>
-        <div class="faq"><b>4. 送る</b><p>書き出しタブから .ics として共有し、FirstSeed カレンダーで取り込みます。<b>取り込みは「追加」なので、もとの予定は消えません。</b></p></div>
+        <div class="faq"><b>4. 送る</b><p>書き出しタブから .ics として共有し、FirstSeed カレンダーで取り込みます。Google カレンダーには 1 件ずつ登録画面を開くか、.ics をインポートします。<b>どれも「追加」なので、もとの予定は消えません。</b></p></div>
       </div>
     </div>
 
     <div class="sec">
       <h2>API キーについて</h2>
       <div class="card" style="padding:6px 15px">
-        <div class="faq"><b>なぜ必要なのか</b><p>手書き文字の読み取りは、このアプリだけでは行えません。画像は Anthropic の Claude に送って解析します。このサイトは GitHub Pages 上の静的ページで、預かるサーバーを持っていないため、鍵はあなた自身のものを使います。</p></div>
-        <div class="faq"><b>取得のしかた</b><p><a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> でアカウントを作り、API キーを発行します。従量課金で、手帳 1 ページあたりおおよそ 2〜6 円ほどです（Opus 5 の場合）。</p></div>
-        <div class="faq"><b>どこに保存されるか</b><p>キーはこの端末のブラウザ（localStorage）にだけ保存されます。設定で「この端末に保存する」を外すと、タブを閉じるまでの一時保存になります。送信先は <code>api.anthropic.com</code> だけです。</p></div>
+        <div class="faq"><b>なぜ必要なのか</b><p>手書き文字の読み取りは、このアプリだけでは行えません。画像は Google Gemini か Anthropic Claude に送って解析します。このサイトは GitHub Pages 上の静的ページで、預かるサーバーを持っていないため、鍵はあなた自身のものを使います。</p></div>
+        <div class="faq"><b>Gemini（無料で始めたい人向け）</b><p><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> で Google アカウントがあればすぐ発行できます。無料枠があり、手帳を数ページ読む程度なら料金はかかりません。ただし無料枠では、送った内容が Google のサービス改善に使われることがあります（気になる方は有料プランか Claude を）。</p></div>
+        <div class="faq"><b>Claude（手書きの読み取り精度を優先したい人向け）</b><p><a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> でアカウントを作り、API キーを発行します。従量課金で、手帳 1 ページあたりおおよそ 2〜6 円ほどです（Opus 5 の場合）。送った内容は学習に使われません。</p></div>
+        <div class="faq"><b>どこに保存されるか</b><p>キーはこの端末のブラウザ（localStorage）にだけ保存されます。設定で「キーをこの端末に保存する」を外すと、タブを閉じるまでの一時保存になります。送信先は、Gemini なら <code>generativelanguage.googleapis.com</code>、Claude なら <code>api.anthropic.com</code> だけです。</p></div>
         <div class="faq"><b>キーを使わずに済ませたい</b><p>読み取りタブ下部の「テキストから取り込む」に予定を書き並べれば、キーなしでも .ics を作れます。ほかの OCR アプリで文字にしてから貼るのも手です。</p></div>
       </div>
     </div>
@@ -527,37 +552,70 @@ textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
   <div class="sheet-in">
     <h3>設定</h3>
     <label class="f">
-      <span>Anthropic API キー</span>
-      <input type="password" class="inp" id="sKey" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+      <span>読み取りに使うサービス</span>
+      <select class="inp" id="sProvider">
+        <option value="gemini">Google Gemini（無料枠あり）</option>
+        <option value="anthropic">Anthropic Claude（従量課金・手書きに強い）</option>
+      </select>
     </label>
-    <label class="f" style="margin-top:-4px">
-      <span style="display:flex;align-items:center;gap:8px">
-        <input type="checkbox" id="sSaveKey" style="width:17px;height:17px;accent-color:var(--ai)">この端末に保存する
-      </span>
-    </label>
-    <p class="hint" style="margin:-4px 2px 16px">
-      キーは <code>api.anthropic.com</code> にしか送りません。発行は
-      <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic Console</a> から。
-    </p>
-    <div class="row2">
+
+    <div id="setGemini">
+      <label class="f">
+        <span>Gemini API キー</span>
+        <input type="password" class="inp" id="sGKey" placeholder="AIza..." autocomplete="off" spellcheck="false">
+      </label>
+      <p class="hint" style="margin:-6px 2px 12px">
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> で無料で発行できます。送信先は <code>generativelanguage.googleapis.com</code> だけ。
+        無料枠では、送った内容が Google のサービス改善に使われることがあります。
+      </p>
       <label class="f">
         <span>モデル</span>
-        <select class="inp" id="sModel">
-          <option value="claude-opus-5">Claude Opus 5（推奨・いちばん読める）</option>
-          <option value="claude-sonnet-5">Claude Sonnet 5（安い）</option>
-          <option value="claude-haiku-4-5">Claude Haiku 4.5（最安・活字向き）</option>
+        <select class="inp" id="sGModel">
+          <option value="gemini-3.8-flash">Gemini 3.8 Flash（推奨）</option>
+          <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite（軽い・速い）</option>
+          <option value="gemini-2.5-pro">Gemini 2.5 Pro（じっくり）</option>
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
         </select>
       </label>
-      <label class="f">
-        <span>読み取りの丁寧さ</span>
-        <select class="inp" id="sEffort">
-          <option value="high">じっくり（既定）</option>
-          <option value="xhigh">とことん</option>
-          <option value="medium">ふつう</option>
-          <option value="low">さっと</option>
-        </select>
-      </label>
+      <div class="btn-row" style="margin:-4px 0 14px">
+        <button class="btn ghost" id="btnGModels" style="font-size:12.5px;padding:7px 12px;flex:0 1 auto">このキーで使えるモデルを取得</button>
+      </div>
     </div>
+
+    <div id="setAnthropic" hidden>
+      <label class="f">
+        <span>Anthropic API キー</span>
+        <input type="password" class="inp" id="sKey" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+      </label>
+      <p class="hint" style="margin:-6px 2px 12px">
+        発行は <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic Console</a> から。送信先は <code>api.anthropic.com</code> だけ。
+      </p>
+      <div class="row2">
+        <label class="f">
+          <span>モデル</span>
+          <select class="inp" id="sModel">
+            <option value="claude-opus-5">Claude Opus 5（推奨・いちばん読める）</option>
+            <option value="claude-sonnet-5">Claude Sonnet 5（安い）</option>
+            <option value="claude-haiku-4-5">Claude Haiku 4.5（最安・活字向き）</option>
+          </select>
+        </label>
+        <label class="f">
+          <span>読み取りの丁寧さ</span>
+          <select class="inp" id="sEffort">
+            <option value="high">じっくり（既定）</option>
+            <option value="xhigh">とことん</option>
+            <option value="medium">ふつう</option>
+            <option value="low">さっと</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <label class="f" style="margin-top:-2px">
+      <span style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="sSaveKey" style="width:17px;height:17px;accent-color:var(--ai)">キーをこの端末に保存する
+      </span>
+    </label>
     <div class="row2">
       <label class="f">
         <span>時刻がないときの所要時間</span>
@@ -643,11 +701,14 @@ function toast(msg){
 var LS_EV = 'techo.events.v1';
 var LS_SET = 'techo.settings.v1';
 var LS_KEY = 'techo.key.v1';
+var LS_GKEY = 'techo.gkey.v1';
 var LS_THEME = 'techo.theme.v1';
 
 var DEFAULTS = {
+  provider: 'gemini',
   model: 'claude-opus-5',
   effort: 'high',
+  gmodel: 'gemini-3.8-flash',
   dur: 60,
   calName: '手帳',
   alarm: '',
@@ -660,6 +721,7 @@ var S = {
   images: [],
   set: Object.assign({}, DEFAULTS),
   key: '',
+  gkey: '',
   pageNote: '',
   busy: false
 };
@@ -674,6 +736,12 @@ function load(){
     S.set = Object.assign({}, DEFAULTS, s || {});
   }catch(_){}
   try{ S.key = localStorage.getItem(LS_KEY) || ''; }catch(_){}
+  try{ S.gkey = localStorage.getItem(LS_GKEY) || ''; }catch(_){}
+  /* 以前のバージョン（Claude だけ）から来た人は、そのまま Claude を使い続ける */
+  try{
+    var saved = JSON.parse(localStorage.getItem(LS_SET) || '{}') || {};
+    if(S.key && !S.gkey && !saved.provider) S.set.provider = 'anthropic';
+  }catch(_){}
 }
 function saveEvents(){
   try{ localStorage.setItem(LS_EV, JSON.stringify(S.events)); }catch(_){}
@@ -972,10 +1040,13 @@ var SYS = [
   '出力は指定されたスキーマの JSON だけ。前置きも説明も付けない。予定が 1 件も無ければ events は空配列にする。'
 ].join('\n');
 
+var GAPI = 'https://generativelanguage.googleapis.com/v1beta/models/';
+
+function useGemini(){ return S.set.provider === 'gemini'; }
 function apiKey(){
-  var k = (S.key || '').trim();
-  return k;
+  return (useGemini() ? S.gkey : S.key || '').trim();
 }
+function modelName(){ return useGemini() ? S.set.gmodel : S.set.model; }
 
 $('#lnkSettings').addEventListener('click', function(e){ e.preventDefault(); openSettings(); });
 
@@ -985,26 +1056,23 @@ function setProg(html){
   $('#progWrap').innerHTML = html || '';
 }
 
-function analyze(){
-  if(S.busy) return;
-  if(!S.images.length){ toast('先に手帳の写真を追加してください'); return; }
-  if(!apiKey()){ toast('API キーを登録してください'); openSettings(); return; }
+function userPrompt(base, baseD, hint){
+  return [
+    'この手帳の写真から予定を読み取ってください。',
+    '基準日: ' + base + '（' + WD[baseD.getDay()] + '曜日）。年の表記がないときはこの日付に最も近い年として解釈してください。',
+    '今日の日付: ' + ymd(new Date()) + '。',
+    hint ? '利用者からの補足: ' + hint : ''
+  ].filter(Boolean).join('\n');
+}
 
-  var base = $('#baseDate').value || ymd(new Date());
-  var baseD = parseYMD(base) || new Date();
-  var hint = $('#hintText').value.trim();
-
+/* Anthropic Messages API（ストリーミング） */
+function callAnthropic(prompt, usage){
   var content = [];
   S.images.forEach(function(im, i){
     content.push({ type: 'text', text: '【画像' + (i + 1) + '】' });
     content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: im.b64 } });
   });
-  content.push({ type: 'text', text: [
-    'この手帳の写真から予定を読み取ってください。',
-    '基準日: ' + base + '（' + WD[baseD.getDay()] + '曜日）。年の表記がないときはこの日付に最も近い年として解釈してください。',
-    '今日の日付: ' + ymd(new Date()) + '。',
-    hint ? '利用者からの補足: ' + hint : ''
-  ].filter(Boolean).join('\n') });
+  content.push({ type: 'text', text: prompt });
 
   var body = {
     model: S.set.model,
@@ -1016,13 +1084,7 @@ function analyze(){
   };
   if(S.set.model !== 'claude-haiku-4-5') body.output_config.effort = S.set.effort;
 
-  S.busy = true;
-  $('#btnAnalyze').disabled = true;
-  setProg('<div class="prog"><div id="progTx">画像を送っています…</div><div class="bar"><i></i></div></div>');
-
-  var t0 = Date.now(), usage = { i: 0, o: 0 };
-
-  fetch(API, {
+  return fetch(API, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -1037,7 +1099,60 @@ function analyze(){
     }
     if(!res.body) return res.text().then(function(t){ return pickText(JSON.parse(t)); });
     return readStream(res, usage);
-  }).then(function(text){
+  });
+}
+
+/* Gemini API（ストリーミング, alt=sse） */
+function callGemini(prompt, usage){
+  var parts = [];
+  S.images.forEach(function(im, i){
+    parts.push({ text: '【画像' + (i + 1) + '】' });
+    parts.push({ inline_data: { mime_type: 'image/jpeg', data: im.b64 } });
+  });
+  parts.push({ text: prompt });
+
+  var body = {
+    systemInstruction: { parts: [{ text: SYS }] },
+    contents: [{ role: 'user', parts: parts }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseJsonSchema: SCHEMA,
+      maxOutputTokens: 32768,
+      temperature: 0.2
+    }
+  };
+
+  var url = GAPI + encodeURIComponent(S.set.gmodel) + ':streamGenerateContent?alt=sse';
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey() },
+    body: JSON.stringify(body)
+  }).then(function(res){
+    if(!res.ok){
+      return res.text().then(function(t){ throw new Error(gemMsg(res.status, t)); });
+    }
+    if(!res.body) return res.text().then(function(t){ return pickGemText(JSON.parse(t)); });
+    return readGemStream(res, usage);
+  });
+}
+
+function analyze(){
+  if(S.busy) return;
+  if(!S.images.length){ toast('先に手帳の写真を追加してください'); return; }
+  if(!apiKey()){ toast((useGemini() ? 'Gemini' : 'Anthropic') + ' の API キーを登録してください'); openSettings(); return; }
+
+  var base = $('#baseDate').value || ymd(new Date());
+  var baseD = parseYMD(base) || new Date();
+  var hint = $('#hintText').value.trim();
+  var prompt = userPrompt(base, baseD, hint);
+
+  S.busy = true;
+  $('#btnAnalyze').disabled = true;
+  setProg('<div class="prog"><div id="progTx">画像を送っています…</div><div class="bar"><i></i></div></div>');
+
+  var t0 = Date.now(), usage = { i: 0, o: 0 };
+
+  (useGemini() ? callGemini(prompt, usage) : callAnthropic(prompt, usage)).then(function(text){
     var data = parseJSON(text);
     if(!data || !Array.isArray(data.events)) throw new Error('読み取り結果を解釈できませんでした。もう一度お試しください。');
     var year = baseD.getFullYear();
@@ -1056,7 +1171,7 @@ function analyze(){
       toast(r.added + ' 件を追加' + (r.dup ? '（' + r.dup + ' 件は重複のため除外）' : ''));
       show('events');
     }
-    $('#brandSub').textContent = sec + '秒 / 約' + cost;
+    $('#brandSub').textContent = modelName() + ' · ' + sec + '秒 · ' + cost;
   }).catch(function(err){
     setProg('<div class="errbox"><b>読み取れませんでした</b>' + esc(err.message || String(err)) + '</div>');
   }).then(function(){
@@ -1108,6 +1223,95 @@ function pickText(json){
   return '';
 }
 
+/* Gemini の 1 チャンク（GenerateContentResponse）から本文テキストだけ取り出す */
+function pickGemText(json){
+  var out = '';
+  if(!json) return out;
+  if(json.promptFeedback && json.promptFeedback.blockReason){
+    throw new Error('Gemini がこの画像の処理を拒否しました（' + json.promptFeedback.blockReason + '）。');
+  }
+  var c = json.candidates && json.candidates[0];
+  if(c && c.content && Array.isArray(c.content.parts)){
+    c.content.parts.forEach(function(p){ if(p && typeof p.text === 'string' && !p.thought) out += p.text; });
+  }
+  return out;
+}
+
+function readGemStream(res, usage){
+  var reader = res.body.getReader(), dec = new TextDecoder();
+  var buf = '', text = '', err = null, finish = '';
+  function step(){
+    return reader.read().then(function(r){
+      if(r.done) return;
+      buf += dec.decode(r.value, { stream: true });
+      var i;
+      while((i = buf.indexOf('\n')) >= 0){
+        var line = buf.slice(0, i).replace(/\r$/, '');
+        buf = buf.slice(i + 1);
+        if(line.indexOf('data:') !== 0) continue;
+        var raw = line.slice(5).trim();
+        if(!raw) continue;
+        var ev; try{ ev = JSON.parse(raw); }catch(_){ continue; }
+        if(ev.error){ err = new Error(gemMsg(ev.error.code || 0, JSON.stringify(ev))); continue; }
+        try{ text += pickGemText(ev); }catch(e){ err = e; continue; }
+        var c = ev.candidates && ev.candidates[0];
+        if(c && c.finishReason) finish = c.finishReason;
+        if(ev.usageMetadata){
+          usage.i = ev.usageMetadata.promptTokenCount || usage.i;
+          usage.o = (ev.usageMetadata.candidatesTokenCount || 0) + (ev.usageMetadata.thoughtsTokenCount || 0) || usage.o;
+        }
+        var n = (text.match(/"title"/g) || []).length;
+        var tx = $('#progTx');
+        if(tx) tx.textContent = n ? ('読み取り中… ' + n + ' 件目') : '手帳を読んでいます…';
+      }
+      return step();
+    });
+  }
+  return step().then(function(){
+    if(err) throw err;
+    if(finish && finish !== 'STOP' && !text.trim()){
+      throw new Error('Gemini が途中で止まりました（' + finish + '）。モデルを変えるか、画像の枚数を減らして試してください。');
+    }
+    return text;
+  });
+}
+
+function gemMsg(status, body){
+  var detail = '', reason = '';
+  try{
+    var j = JSON.parse(body);
+    var e = j.error || (Array.isArray(j) && j[0] && j[0].error) || {};
+    detail = e.message || ''; reason = e.status || '';
+    status = status || e.code || 0;
+  }catch(_){ detail = (body || '').slice(0, 200); }
+  if(status === 400 && /API key/i.test(detail)) return 'Gemini の API キーが受け付けられませんでした。設定を見直してください。';
+  if(status === 401 || status === 403) return 'このキーでは利用できませんでした。' + detail;
+  if(status === 404) return 'モデル「' + S.set.gmodel + '」が見つかりません。設定で「このキーで使えるモデルを取得」を押して選び直してください。';
+  if(status === 429 || reason === 'RESOURCE_EXHAUSTED') return '無料枠の上限に達しました。1 分ほど待ってから、または Flash-Lite などに切り替えてもう一度お試しください。';
+  if(status === 400) return 'リクエストが通りませんでした。' + detail;
+  if(status === 413) return '画像が大きすぎます。枚数を減らして試してください。';
+  if(status >= 500) return 'Google 側が混み合っています。少し待ってからもう一度お試しください。';
+  return 'エラー (' + status + ') ' + detail;
+}
+
+/* このキーで使えるモデル一覧（画像入力・generateContent 対応のものだけ） */
+function fetchGeminiModels(key){
+  return fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', {
+    headers: { 'x-goog-api-key': key }
+  }).then(function(res){
+    if(!res.ok) return res.text().then(function(t){ throw new Error(gemMsg(res.status, t)); });
+    return res.json();
+  }).then(function(j){
+    return (j.models || []).filter(function(m){
+      var id = (m.name || '').replace(/^models\//, '');
+      var ok = (m.supportedGenerationMethods || []).indexOf('generateContent') >= 0;
+      return ok && /^gemini-/.test(id) && !/image|tts|audio|embedding|live|native|computer|robotics/i.test(id);
+    }).map(function(m){
+      return { id: m.name.replace(/^models\//, ''), name: m.displayName || m.name };
+    }).sort(function(a, b){ return a.id < b.id ? 1 : -1; });
+  });
+}
+
 function parseJSON(text){
   text = String(text || '').trim();
   if(!text) return null;
@@ -1142,6 +1346,9 @@ var PRICE = {
   'claude-haiku-4-5': [1, 5]
 };
 function estCost(u){
+  if(useGemini()){
+    return (u.i + u.o) ? ('約' + Math.round((u.i + u.o) / 100) / 10 + 'k トークン（無料枠内なら 0 円）') : '無料枠';
+  }
   var p = PRICE[S.set.model] || PRICE['claude-opus-5'];
   var usd = (u.i / 1e6) * p[0] + (u.o / 1e6) * p[1];
   if(!usd) return '—';
@@ -1504,6 +1711,50 @@ function renderExport(){
   var no = list.length === 0;
   ['#btnShare','#btnDownload','#btnCopyText'].forEach(function(s){ $(s).disabled = no; });
   $('#cntSel').textContent = list.length;
+  renderGcal(list);
+}
+
+/* Google カレンダーの「予定を作成」画面をあらかじめ埋めた URL */
+function gcalURL(e){
+  var dates;
+  if(e.allDay){
+    var last = e.endDate && e.endDate > e.date ? e.endDate : e.date;
+    dates = e.date.replace(/-/g, '') + '/' + addDays(last, 1).replace(/-/g, '');
+  }else{
+    var endDate = toMin(e.end) <= toMin(e.start) ? addDays(e.date, 1) : e.date;
+    dates = dtLocal(e.date, e.start) + '/' + dtLocal(endDate, e.end);
+  }
+  var q = [
+    'action=TEMPLATE',
+    'text=' + encodeURIComponent(e.title),
+    'dates=' + dates,
+    'ctz=Asia/Tokyo'
+  ];
+  if(e.location) q.push('location=' + encodeURIComponent(e.location));
+  var det = [];
+  if(e.notes) det.push(e.notes);
+  if(e.conf < 0.72) det.push('※ 手帳からの読み取りに自信のない箇所があります');
+  if(det.length) q.push('details=' + encodeURIComponent(det.join('\n')));
+  return 'https://calendar.google.com/calendar/render?' + q.join('&');
+}
+
+function renderGcal(list){
+  var box = $('#gcalList');
+  if(!list.length){ box.innerHTML = ''; return; }
+  box.innerHTML = list.map(function(e){
+    var when = fmtDay(e.date) + ' ' + (e.allDay ? '終日' : e.start + '–' + e.end);
+    return '<div class="grow' + (e.sent ? ' sent' : '') + '">' +
+      '<div class="gt"><b>' + esc(e.title) + '</b><span>' + esc(when) + '</span></div>' +
+      '<a class="btn" href="' + esc(gcalURL(e)) + '" target="_blank" rel="noopener" data-gcal="' + e.id + '">開く</a>' +
+      '</div>';
+  }).join('');
+  $$('[data-gcal]', box).forEach(function(a){
+    a.addEventListener('click', function(){
+      var e = byId(a.dataset.gcal); if(!e) return;
+      e.sent = e.sent || Date.now(); saveEvents(); renderEvents();
+      a.closest('.grow').classList.add('sent');
+    });
+  });
 }
 
 function markSent(list){
@@ -1570,30 +1821,71 @@ function fallbackCopy(t){
    ========================================================== */
 $('#btnSettings').addEventListener('click', openSettings);
 function openSettings(){
+  $('#sProvider').value = S.set.provider;
   $('#sKey').value = S.key || '';
+  $('#sGKey').value = S.gkey || '';
   $('#sSaveKey').checked = S.set.saveKey !== false;
   $('#sModel').value = S.set.model;
   $('#sEffort').value = S.set.effort;
+  setGModel(S.set.gmodel);
   $('#sDur').value = String(S.set.dur);
   $('#sCalName').value = S.set.calName;
   $('#sAlarm').value = S.set.alarm || '';
+  syncProvider();
   openSheet('#sheetSet');
 }
+function syncProvider(){
+  var g = $('#sProvider').value === 'gemini';
+  $('#setGemini').hidden = !g;
+  $('#setAnthropic').hidden = g;
+}
+$('#sProvider').addEventListener('change', syncProvider);
+
+/* 一覧に無いモデル ID が保存されていたら選択肢に足してから選ぶ */
+function setGModel(id){
+  var sel = $('#sGModel');
+  if(id && !Array.prototype.some.call(sel.options, function(o){ return o.value === id; })){
+    var o = document.createElement('option'); o.value = id; o.textContent = id; sel.appendChild(o);
+  }
+  sel.value = id || DEFAULTS.gmodel;
+}
+$('#btnGModels').addEventListener('click', function(){
+  var key = $('#sGKey').value.trim();
+  if(!key){ toast('先に Gemini の API キーを入れてください'); return; }
+  var btn = this; btn.disabled = true; btn.textContent = '取得中…';
+  fetchGeminiModels(key).then(function(list){
+    if(!list.length){ toast('使えるモデルが見つかりませんでした'); return; }
+    var sel = $('#sGModel'), cur = sel.value;
+    sel.innerHTML = '';
+    list.forEach(function(m){
+      var o = document.createElement('option'); o.value = m.id;
+      o.textContent = m.name + (m.name !== m.id ? '（' + m.id + '）' : '');
+      sel.appendChild(o);
+    });
+    setGModel(list.some(function(m){ return m.id === cur; }) ? cur : list[0].id);
+    toast(list.length + ' 個のモデルを取得しました');
+  }).catch(function(e){ toast(e.message || '取得できませんでした'); })
+    .then(function(){ btn.disabled = false; btn.textContent = 'このキーで使えるモデルを取得'; });
+});
+
 $('#btnSaveSet').addEventListener('click', function(){
+  S.set.provider = $('#sProvider').value;
   S.key = $('#sKey').value.trim();
+  S.gkey = $('#sGKey').value.trim();
   S.set.saveKey = $('#sSaveKey').checked;
   S.set.model = $('#sModel').value;
   S.set.effort = $('#sEffort').value;
+  S.set.gmodel = $('#sGModel').value || DEFAULTS.gmodel;
   S.set.dur = +$('#sDur').value || 60;
   S.set.calName = $('#sCalName').value.trim() || '手帳';
   S.set.alarm = $('#sAlarm').value;
   saveSet();
   try{
-    if(S.set.saveKey && S.key) localStorage.setItem(LS_KEY, S.key);
-    else localStorage.removeItem(LS_KEY);
+    if(S.set.saveKey && S.key) localStorage.setItem(LS_KEY, S.key); else localStorage.removeItem(LS_KEY);
+    if(S.set.saveKey && S.gkey) localStorage.setItem(LS_GKEY, S.gkey); else localStorage.removeItem(LS_GKEY);
   }catch(_){}
   closeSheets(); toast('保存しました');
-  $('#analyzeHint').style.opacity = S.key ? '.6' : '1';
+  $('#analyzeHint').style.opacity = apiKey() ? '.6' : '1';
 });
 $('#btnResetSent').addEventListener('click', function(){
   if(!confirm('「書き出し済み」の印をすべて消します。よろしいですか？')) return;
@@ -1610,7 +1902,7 @@ renderShots();
 renderEvents();
 renderExport();
 updateBadge();
-if(S.key) $('#analyzeHint').style.opacity = '.6';
+if(apiKey()) $('#analyzeHint').style.opacity = '.6';
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
