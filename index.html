@@ -170,6 +170,82 @@ textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
 .chip.ok{background:var(--ok-soft); color:var(--ok)}
 .chip.ai{background:var(--ai-soft); color:var(--ai-ink)}
 
+/* ---- 分類（タブ）と色 ---- */
+:root{
+  --c-red:#C4392C; --c-red-soft:#F8E1DD;
+  --c-orange:#C2661C; --c-orange-soft:#F9E6D4;
+  --c-yellow:#9E8412; --c-yellow-soft:#F5EDC9;
+  --c-green:#2E7A47; --c-green-soft:#DCEEE2;
+  --c-blue:#2C5E9E; --c-blue-soft:#DCE7F5;
+  --c-purple:#6D48A6; --c-purple-soft:#E9E0F5;
+  --c-pink:#B7417A; --c-pink-soft:#F7DFEA;
+  --c-gray:#666B73; --c-gray-soft:#E4E6EA;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --c-red:#F08A7E; --c-red-soft:#3B1E1A;
+    --c-orange:#F0A160; --c-orange-soft:#3A2614;
+    --c-yellow:#E4C64E; --c-yellow-soft:#342D10;
+    --c-green:#7FC796; --c-green-soft:#16301F;
+    --c-blue:#86B5EA; --c-blue-soft:#17283C;
+    --c-purple:#BFA3EE; --c-purple-soft:#2A1F3E;
+    --c-pink:#EE94BE; --c-pink-soft:#3A1B2B;
+    --c-gray:#A7ADB7; --c-gray-soft:#2A2D33;
+  }
+}
+:root[data-theme="dark"]{
+  --c-red:#F08A7E; --c-red-soft:#3B1E1A;
+  --c-orange:#F0A160; --c-orange-soft:#3A2614;
+  --c-yellow:#E4C64E; --c-yellow-soft:#342D10;
+  --c-green:#7FC796; --c-green-soft:#16301F;
+  --c-blue:#86B5EA; --c-blue-soft:#17283C;
+  --c-purple:#BFA3EE; --c-purple-soft:#2A1F3E;
+  --c-pink:#EE94BE; --c-pink-soft:#3A1B2B;
+  --c-gray:#A7ADB7; --c-gray-soft:#2A2D33;
+}
+.cat-red{--cc:var(--c-red); --cc-soft:var(--c-red-soft)}
+.cat-orange{--cc:var(--c-orange); --cc-soft:var(--c-orange-soft)}
+.cat-yellow{--cc:var(--c-yellow); --cc-soft:var(--c-yellow-soft)}
+.cat-green{--cc:var(--c-green); --cc-soft:var(--c-green-soft)}
+.cat-blue{--cc:var(--c-blue); --cc-soft:var(--c-blue-soft)}
+.cat-purple{--cc:var(--c-purple); --cc-soft:var(--c-purple-soft)}
+.cat-pink{--cc:var(--c-pink); --cc-soft:var(--c-pink-soft)}
+.cat-gray{--cc:var(--c-gray); --cc-soft:var(--c-gray-soft)}
+
+.cattabs{
+  display:flex; gap:6px; overflow-x:auto; padding:0 2px 12px; margin:0 -2px;
+  -webkit-overflow-scrolling:touch; scrollbar-width:none; touch-action:pan-x pan-y;
+}
+.cattabs::-webkit-scrollbar{display:none}
+.ctab{
+  flex:none; border:1px solid var(--line); background:var(--card); color:var(--muted);
+  border-radius:99px; padding:6px 12px; font-size:12.5px; font-weight:700; white-space:nowrap;
+  display:inline-flex; align-items:center; gap:6px;
+}
+.ctab .dot{width:9px; height:9px; border-radius:99px; background:var(--cc, var(--line)); flex:none}
+.ctab .n{font-family:var(--f-mono); font-weight:400; font-size:11px; color:var(--faint)}
+.ctab.on{background:var(--ink); color:var(--paper); border-color:var(--ink)}
+.ctab.on .n{color:var(--paper); opacity:.7}
+.ctab.edit{border-style:dashed; color:var(--faint)}
+
+.ev.hl{background:var(--cc-soft); border-color:color-mix(in srgb, var(--cc) 38%, var(--line)); box-shadow:inset 4px 0 0 var(--cc), var(--shadow)}
+.chip.cat{background:var(--cc-soft, var(--sunken)); color:var(--cc, var(--muted))}
+.chip.cat.plain{background:var(--sunken); color:var(--muted)}
+
+.catrow{display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 0; border-top:1px solid var(--line-soft)}
+.catrow:first-child{border-top:0}
+.catrow .inp{flex:1; min-width:0; padding:8px 10px}
+.catrow .x{border:1px solid var(--line); background:var(--card); color:var(--muted); width:34px; height:36px; border-radius:9px; flex:none}
+.swatches{display:flex; gap:6px; flex-wrap:wrap; flex:1 0 100%; padding-left:26px}
+.sw{
+  width:24px; height:24px; border-radius:99px; border:2px solid transparent; padding:0;
+  background:var(--cc, var(--card)); position:relative; flex:none;
+}
+.sw.none{background:var(--card); border-color:var(--line)}
+.sw.none::after{content:''; position:absolute; left:4px; right:4px; top:50%; height:1.5px; background:var(--faint); transform:rotate(-45deg)}
+.sw[aria-pressed="true"]{border-color:var(--ink); box-shadow:0 0 0 2px var(--paper) inset}
+.dragh{color:var(--faint); font-size:15px; flex:none; padding:0 2px; cursor:grab}
+
 .empty{
   text-align:center; color:var(--faint); font-size:13.5px; padding:38px 18px; line-height:1.9;
   border:1px dashed var(--line); border-radius:var(--r); background:color-mix(in srgb, var(--card) 55%, transparent);
@@ -401,6 +477,7 @@ textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
       <button class="mini" id="btnNone">解除</button>
       <button class="mini" id="btnAdd">＋追加</button>
     </div>
+    <div class="cattabs" id="catTabs"></div>
     <div id="pageNote"></div>
     <div id="evList"></div>
     <div class="sec" id="evFoot" hidden style="margin-top:20px">
@@ -565,6 +642,7 @@ textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
       <label class="f"><span>開始</span><input type="time" class="inp" id="eStart"></label>
       <label class="f"><span>終了</span><input type="time" class="inp" id="eEnd"></label>
     </div>
+    <label class="f"><span>分類</span><select class="inp" id="eCat"></select></label>
     <label class="f"><span>場所</span><input type="text" class="inp" id="eLoc" placeholder="第2会議室"></label>
     <label class="f"><span>メモ</span><textarea class="inp" id="eNotes" style="min-height:64px"></textarea></label>
     <div class="btn-row" style="margin:16px 0 8px">
@@ -684,6 +762,25 @@ textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
  </div>
 </div>
 
+<!-- 分類の編集 -->
+<div class="sheet" id="sheetCats">
+ <div class="sheet-panel">
+  <div class="grab"></div>
+  <div class="sheet-in">
+    <h3>分類を編集</h3>
+    <p class="hint" style="margin:-6px 2px 12px">予定タブの上に、ここで作った分類がタブとして並びます。色を付けると、その分類の予定が一覧でハイライトされます。読み取り時には、手帳の色分けや内容から自動で振り分けを試みます。</p>
+    <div id="catRows"></div>
+    <div class="btn-row" style="margin:10px 0 0">
+      <button class="btn ghost" id="btnCatAdd" style="flex:0 1 auto">＋ 分類を追加</button>
+    </div>
+    <div class="btn-row" style="margin:16px 0 8px">
+      <button class="btn primary" id="btnCatSave" style="flex:2">保存する</button>
+      <button class="btn ghost" id="btnCatCancel">閉じる</button>
+    </div>
+  </div>
+ </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -741,6 +838,7 @@ var LS_SET = 'techo.settings.v1';
 var LS_KEY = 'techo.key.v1';
 var LS_GKEY = 'techo.gkey.v1';
 var LS_THEME = 'techo.theme.v1';
+var LS_CATS = 'techo.cats.v1';
 
 var DEFAULTS = {
   provider: 'gemini',
@@ -762,6 +860,8 @@ var S = {
   set: Object.assign({}, DEFAULTS),
   key: '',
   gkey: '',
+  cats: [],          /* {id, name, color} */
+  catFilter: 'all',  /* 'all' | 'none' | 分類 id */
   pageNote: '',
   busy: false
 };
@@ -777,17 +877,56 @@ function load(){
   }catch(_){}
   try{ S.key = localStorage.getItem(LS_KEY) || ''; }catch(_){}
   try{ S.gkey = localStorage.getItem(LS_GKEY) || ''; }catch(_){}
+  try{
+    var c = localStorage.getItem(LS_CATS);
+    if(c === null){
+      S.cats = [{ id: 'c_imp', name: '重要', color: 'red' }, { id: 'c_cls', name: '授業', color: 'blue' }, { id: 'c_job', name: 'アルバイト', color: 'green' }];
+    }else{
+      var arr = JSON.parse(c || '[]');
+      S.cats = Array.isArray(arr) ? arr.filter(function(x){ return x && x.id && x.name; }) : [];
+    }
+  }catch(_){}
   /* 以前のバージョン（Claude だけ）から来た人は、そのまま Claude を使い続ける */
   try{
     var saved = JSON.parse(localStorage.getItem(LS_SET) || '{}') || {};
     if(S.key && !S.gkey && !saved.provider) S.set.provider = 'anthropic';
   }catch(_){}
 }
+function saveCats(){
+  try{ localStorage.setItem(LS_CATS, JSON.stringify(S.cats)); }catch(_){}
+}
 function saveEvents(){
   try{ localStorage.setItem(LS_EV, JSON.stringify(S.events)); }catch(_){}
 }
 function saveSet(){
   try{ localStorage.setItem(LS_SET, JSON.stringify(S.set)); }catch(_){}
+}
+
+/* ---- 分類 ---- */
+var PALETTE = [
+  { k: '', n: 'なし' }, { k: 'red', n: '赤' }, { k: 'orange', n: '橙' }, { k: 'yellow', n: '黄' },
+  { k: 'green', n: '緑' }, { k: 'blue', n: '青' }, { k: 'purple', n: '紫' }, { k: 'pink', n: '桃' }, { k: 'gray', n: '灰' }
+];
+function catById(id){
+  for(var i = 0; i < S.cats.length; i++) if(S.cats[i].id === id) return S.cats[i];
+  return null;
+}
+/* 名前から分類を探す。完全一致 → 片方がもう片方を含む、の順 */
+function matchCat(name){
+  name = String(name == null ? '' : name).trim();
+  if(!name) return '';
+  var i, c;
+  for(i = 0; i < S.cats.length; i++){ c = S.cats[i]; if(c.name === name) return c.id; }
+  var low = name.toLowerCase();
+  for(i = 0; i < S.cats.length; i++){
+    c = S.cats[i]; var cn = c.name.toLowerCase();
+    if(low.indexOf(cn) >= 0 || cn.indexOf(low) >= 0) return c.id;
+  }
+  return '';
+}
+function catClass(e){
+  var c = e && e.cat ? catById(e.cat) : null;
+  return c && c.color ? ' cat-' + c.color : '';
 }
 
 /* ==========================================================
@@ -800,7 +939,7 @@ function normalize(raw, fallbackYear){
     date: '', endDate: '',
     allDay: false,
     start: '', end: '',
-    title: '', location: '', notes: '',
+    title: '', location: '', notes: '', cat: '',
     conf: 1, sent: 0, on: true
   };
   var date = String(raw.date || '').trim();
@@ -824,6 +963,7 @@ function normalize(raw, fallbackYear){
   ev.location = String(raw.location || '').trim();
   ev.notes = String(raw.notes || '').trim();
   ev.conf = typeof raw.confidence === 'number' ? Math.max(0, Math.min(1, raw.confidence)) : 1;
+  ev.cat = raw.cat && catById(raw.cat) ? raw.cat : matchCat(raw.category);
 
   var st = normTime(raw.start), en = normTime(raw.end);
   if(raw.allDay === true || !st){
@@ -1073,9 +1213,10 @@ var SCHEMA = {
           title: { type: 'string', description: '予定の内容。簡潔に' },
           location: { type: 'string', description: '場所。書かれていなければ空文字' },
           notes: { type: 'string', description: '補足や、読み取りに自信のない箇所の注記。なければ空文字' },
+          category: { type: 'string', description: '利用者が指定した分類名のどれかに当てはまれば、その名前をそのまま。当てはまらない・迷う場合は空文字' },
           confidence: { type: 'number', description: '読み取りの自信 0.0〜1.0' }
         },
-        required: ['date','endDate','allDay','start','end','title','location','notes','confidence'],
+        required: ['date','endDate','allDay','start','end','title','location','notes','category','confidence'],
         additionalProperties: false
       }
     },
@@ -1128,6 +1269,7 @@ function userPrompt(base, baseD, hint){
     'この手帳の写真から予定を読み取ってください。',
     '基準日: ' + base + '（' + WD[baseD.getDay()] + '曜日）。年の表記がないときはこの日付に最も近い年として解釈してください。',
     '今日の日付: ' + ymd(new Date()) + '。',
+    S.cats.length ? '分類: 各予定を次の分類のいずれかに振り分けてください（手帳の色分け・記号・内容から判断し、当てはまらなければ空文字）: ' + S.cats.map(function(c){ return c.name; }).join(' / ') : '',
     hint ? '利用者からの補足: ' + hint : ''
   ].filter(Boolean).join('\n');
 }
@@ -1472,11 +1614,19 @@ function parseLines(raw, base){
     var loc = '';
     var at = /[@＠]\s*([^@＠]+)$/.exec(s);
     if(at){ loc = at[1].trim(); s = s.slice(0, at.index).trim(); }
+
+    /* #授業 【授業】 [授業] のような印で分類を指定できる */
+    var cat = '';
+    s = s.replace(/(?:^|\s)#(\S+)|【([^】]+)】|\[([^\]]+)\]/g, function(m, a, b, c){
+      var id = matchCat(a || b || c);
+      if(id){ cat = id; return ' '; }
+      return m;
+    }).replace(/\s+/g, ' ').trim();
     if(!s) return;
 
     var ev = normalize({
       date: curDate, allDay: allDay, start: st, end: en,
-      title: s, location: loc, notes: '', confidence: 1
+      title: s, location: loc, notes: '', confidence: 1, cat: cat
     }, year);
     if(ev) out.push(ev);
   });
@@ -1488,8 +1638,38 @@ function parseLines(raw, base){
    ========================================================== */
 var CK_SVG = '<svg viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7"/></svg>';
 
+/* いま表示中のタブに入る予定 */
+function visibleEvents(){
+  var f = S.catFilter;
+  if(f === 'all') return S.events.slice();
+  if(f === 'none') return S.events.filter(function(e){ return !e.cat || !catById(e.cat); });
+  return S.events.filter(function(e){ return e.cat === f; });
+}
+
+function renderCatTabs(){
+  var box = $('#catTabs'); if(!box) return;
+  if(S.catFilter !== 'all' && S.catFilter !== 'none' && !catById(S.catFilter)) S.catFilter = 'all';
+  var counts = { all: S.events.length, none: 0 };
+  S.events.forEach(function(e){
+    if(e.cat && catById(e.cat)) counts[e.cat] = (counts[e.cat] || 0) + 1; else counts.none++;
+  });
+  var tabs = [{ id: 'all', name: 'すべて', color: '' }].concat(S.cats);
+  if(counts.none && S.cats.length) tabs.push({ id: 'none', name: '未分類', color: '' });
+  box.innerHTML = tabs.map(function(t){
+    var on = S.catFilter === t.id;
+    return '<button class="ctab' + (on ? ' on' : '') + (t.color ? ' cat-' + t.color : '') + '" data-cat="' + esc(t.id) + '">' +
+      (t.id !== 'all' && t.id !== 'none' ? '<span class="dot"></span>' : '') + esc(t.name) +
+      '<span class="n">' + (counts[t.id] || 0) + '</span></button>';
+  }).join('') + '<button class="ctab edit" id="btnCats">分類を編集</button>';
+  $$('[data-cat]', box).forEach(function(b){
+    b.addEventListener('click', function(){ S.catFilter = b.dataset.cat; renderEvents(); });
+  });
+  $('#btnCats').addEventListener('click', openCats);
+}
+
 function renderEvents(){
   var box = $('#evList');
+  renderCatTabs();
   $('#pageNote').innerHTML = S.pageNote
     ? '<div class="prog" style="margin:0 0 14px"><b>読み取りメモ</b><br>' + esc(S.pageNote) + '</div>' : '';
 
@@ -1501,8 +1681,15 @@ function renderEvents(){
   }
   $('#evFoot').hidden = false;
 
+  var list = visibleEvents();
+  if(!list.length){
+    var fc = catById(S.catFilter);
+    box.innerHTML = '<div class="empty"><b>' + esc(fc ? fc.name : '未分類') + ' の予定はありません</b>予定をタップして「分類」を変えると、ここに入ります。</div>';
+    $('#cntSel').textContent = selected().length; $('#cntAll').textContent = S.events.length;
+    return;
+  }
   var groups = [], gi = {};
-  S.events.forEach(function(e){
+  list.forEach(function(e){
     if(!gi[e.date]){ gi[e.date] = { date: e.date, items: [] }; groups.push(gi[e.date]); }
     gi[e.date].items.push(e);
   });
@@ -1540,9 +1727,11 @@ function evHTML(e){
   if(e.location) meta.push('📍 ' + esc(e.location));
   if(e.notes) meta.push(esc(e.notes));
   var tags = '';
+  var c = e.cat ? catById(e.cat) : null;
+  if(c) tags += '<span class="chip cat' + (c.color ? '' : ' plain') + '">' + esc(c.name) + '</span>';
   if(e.conf < 0.72) tags += '<span class="chip warn">要確認</span>';
   if(e.sent) tags += '<span class="chip ok">書き出し済み</span>';
-  return '<div class="ev' + (e.on ? '' : ' off') + (e.sent ? ' sent' : '') + '">' +
+  return '<div class="ev' + (e.on ? '' : ' off') + (e.sent ? ' sent' : '') + (c && c.color ? ' hl cat-' + c.color : '') + '">' +
     '<button class="ck" data-ck="' + e.id + '" role="checkbox" aria-checked="' + (e.on ? 'true' : 'false') + '" aria-label="選択">' + CK_SVG + '</button>' +
     '<button class="ev-body" data-edit="' + e.id + '">' +
       '<div class="ev-time' + (e.allDay ? ' allday' : '') + '">' + esc(time) + '</div>' +
@@ -1558,10 +1747,10 @@ function byId(id){
 }
 
 $('#btnAll').addEventListener('click', function(){
-  S.events.forEach(function(e){ e.on = true; }); saveEvents(); renderEvents(); renderExport();
+  visibleEvents().forEach(function(e){ e.on = true; }); saveEvents(); renderEvents(); renderExport();
 });
 $('#btnNone').addEventListener('click', function(){
-  S.events.forEach(function(e){ e.on = false; }); saveEvents(); renderEvents(); renderExport();
+  visibleEvents().forEach(function(e){ e.on = false; }); saveEvents(); renderEvents(); renderExport();
 });
 $('#btnDelSel').addEventListener('click', function(){
   var n = S.events.filter(function(e){ return e.on; }).length;
@@ -1598,6 +1787,10 @@ function openEdit(id){
   $('#eEnd').value = base.end || '10:00';
   $('#eLoc').value = base.location || '';
   $('#eNotes').value = base.notes || '';
+  var sel = $('#eCat');
+  sel.innerHTML = '<option value="">なし</option>' + S.cats.map(function(c){ return '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>'; }).join('');
+  var pre = e ? (e.cat || '') : (S.catFilter !== 'all' && S.catFilter !== 'none' ? S.catFilter : '');
+  sel.value = catById(pre) ? pre : '';
   syncAllDay();
   openSheet('#sheetEdit');
   setTimeout(function(){ if(!e) $('#eTitle').focus(); }, 260);
@@ -1628,6 +1821,7 @@ $('#btnSaveEv').addEventListener('click', function(){
   e.title = title;
   e.location = $('#eLoc').value.trim();
   e.notes = $('#eNotes').value.trim();
+  e.cat = catById($('#eCat').value) ? $('#eCat').value : '';
   e.conf = 1; e.on = true;
   sortEvents(); saveEvents(); renderEvents(); renderExport(); updateBadge();
   closeSheets(); toast('保存しました');
@@ -1637,6 +1831,63 @@ $('#btnDelEv').addEventListener('click', function(){
   S.events = S.events.filter(function(e){ return e.id !== editing; });
   saveEvents(); renderEvents(); renderExport(); updateBadge();
   closeSheets(); toast('消しました');
+});
+
+/* ---- 分類の編集シート ---- */
+function openCats(){
+  var box = $('#catRows');
+  box.innerHTML = '';
+  S.cats.forEach(function(c){ box.appendChild(catRow(c)); });
+  if(!S.cats.length) box.appendChild(catRow({ id: '', name: '', color: '' }));
+  openSheet('#sheetCats');
+}
+function catRow(c){
+  var row = document.createElement('div');
+  row.className = 'catrow';
+  row.dataset.id = c.id || '';
+  row.dataset.color = c.color || '';
+  row.innerHTML =
+    '<input type="text" class="inp" value="' + esc(c.name) + '" placeholder="分類の名前（例：授業）" maxlength="20">' +
+    '<button class="x" type="button" aria-label="この分類を消す">×</button>' +
+    '<div class="swatches">' + PALETTE.map(function(p){
+      return '<button type="button" class="sw' + (p.k ? ' cat-' + p.k : ' none') + '" data-c="' + p.k + '" title="' + p.n + '" aria-pressed="' + (p.k === (c.color || '') ? 'true' : 'false') + '"></button>';
+    }).join('') + '</div>';
+  $$('.sw', row).forEach(function(b){
+    b.addEventListener('click', function(){
+      row.dataset.color = b.dataset.c;
+      $$('.sw', row).forEach(function(x){ x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    });
+  });
+  $('.x', row).addEventListener('click', function(){
+    var n = row.dataset.id ? S.events.filter(function(e){ return e.cat === row.dataset.id; }).length : 0;
+    if(n && !confirm('「' + ($('input', row).value || '無題') + '」を消します。この分類の ' + n + ' 件は「未分類」になります。よろしいですか？')) return;
+    row.remove();
+  });
+  return row;
+}
+$('#btnCatAdd').addEventListener('click', function(){
+  var row = catRow({ id: '', name: '', color: '' });
+  $('#catRows').appendChild(row);
+  $('input', row).focus();
+});
+$('#btnCatCancel').addEventListener('click', closeSheets);
+$('#btnCatSave').addEventListener('click', function(){
+  var next = [], seen = {};
+  $$('.catrow', $('#catRows')).forEach(function(row){
+    var name = $('input', row).value.trim().replace(/\s+/g, ' ');
+    if(!name) return;
+    if(seen[name]) return;
+    seen[name] = 1;
+    next.push({ id: row.dataset.id || ('c' + uid()), name: name, color: row.dataset.color || '' });
+  });
+  var keep = {};
+  next.forEach(function(c){ keep[c.id] = 1; });
+  S.events.forEach(function(e){ if(e.cat && !keep[e.cat]) e.cat = ''; });
+  S.cats = next;
+  saveCats(); saveEvents();
+  closeSheets();
+  renderEvents(); renderExport();
+  toast('分類を保存しました');
 });
 
 /* ==========================================================
@@ -1716,7 +1967,11 @@ function buildICS(list){
     if(e.conf < 0.72) desc.push('※ 手帳からの読み取りに自信のない箇所があります');
     desc.push('手帳スキャンから取り込み');
     L.push('DESCRIPTION:' + icsEsc(desc.join('\n')));
-    if(e.conf < 0.72) L.push('CATEGORIES:要確認');
+    var cats = [];
+    var ec = e.cat ? catById(e.cat) : null;
+    if(ec) cats.push(ec.name);
+    if(e.conf < 0.72) cats.push('要確認');
+    if(cats.length) L.push('CATEGORIES:' + cats.map(icsEsc).join(','));
     L.push('TRANSP:' + (e.allDay ? 'TRANSPARENT' : 'OPAQUE'));
     L.push('SEQUENCE:0');
     var al = +S.set.alarm;
@@ -1745,7 +2000,8 @@ function buildText(list){
       last = e.date;
     }
     var t = e.allDay ? '終日        ' : (e.start + '-' + e.end);
-    var line = '  ' + t + '  ' + e.title;
+    var tc = e.cat ? catById(e.cat) : null;
+    var line = '  ' + t + '  ' + (tc ? '[' + tc.name + '] ' : '') + e.title;
     if(e.location) line += ' @' + e.location;
     if(e.allDay && e.endDate) line += '（〜' + e.endDate + '）';
     out.push(line);
@@ -1992,6 +2248,9 @@ function gEventBody(e){
     body.start = { dateTime: e.date + 'T' + e.start + ':00', timeZone: 'Asia/Tokyo' };
     body.end = { dateTime: endDate + 'T' + e.end + ':00', timeZone: 'Asia/Tokyo' };
   }
+  var gc = e.cat ? catById(e.cat) : null;
+  var GCOLOR = { red: '11', orange: '6', yellow: '5', green: '10', blue: '9', purple: '3', pink: '4', gray: '8' };
+  if(gc && GCOLOR[gc.color]) body.colorId = GCOLOR[gc.color];
   var al = +S.set.alarm;
   body.reminders = (al > 0 && !e.allDay)
     ? { useDefault: false, overrides: [{ method: 'popup', minutes: al }] }
