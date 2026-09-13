@@ -436,17 +436,24 @@ textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
     </div>
 
     <div class="sec">
-      <h2>Google カレンダーへ追加</h2>
+      <h2>Google カレンダーへまとめて追加</h2>
       <div class="card" style="padding:15px 15px 6px">
         <p style="margin:0 0 12px; font-size:13.5px; color:var(--muted); line-height:1.8">
-          Google カレンダーは <b style="color:var(--ink)">1 件ずつ</b>「開く」で登録画面に飛ばせます（Google カレンダーの App かブラウザが開くので、内容を確認して保存）。まとめて入れたいときは、上の <b style="color:var(--ink)">.ics を保存</b> してから Google カレンダーの設定 →「インポート」で読み込むと一括で入ります。どちらも追加だけで、既存の予定には触りません。
+          Google アカウントでログインすると、選択した予定を <b style="color:var(--ink)">Google カレンダーに直接まとめて登録</b>します（追加だけで、既存の予定には触りません）。初回だけ、設定に Google の「クライアント ID」を入れる必要があります。
         </p>
-        <div class="btn-row" style="margin-bottom:12px">
-          <a class="btn" href="https://calendar.google.com/calendar/u/0/r/settings/export" target="_blank" rel="noopener" style="text-decoration:none">
-            <svg viewBox="0 0 24 24"><path d="M12 4v12"/><path d="M8 12l4 4 4-4"/><path d="M4 18v1.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V18"/></svg>
-            インポート画面を開く
-          </a>
-        </div>
+        <div id="gapiBox"></div>
+      </div>
+      <p class="hint">
+        iPhone の「設定 → カレンダー → アカウント」に Google を追加してあるなら、この画面いちばん上の <b>共有して FirstSeed に送る</b> から、取り込み先に Google のカレンダーを選ぶだけでも一括で入ります。PC のブラウザなら Google カレンダーの設定 →「インポート」で .ics を読み込めます（iPhone の App／ブラウザにはインポート機能がありません）。
+      </p>
+    </div>
+
+    <div class="sec">
+      <h2>Google カレンダーへ 1 件ずつ追加</h2>
+      <div class="card" style="padding:15px 15px 6px">
+        <p style="margin:0 0 6px; font-size:13.5px; color:var(--muted); line-height:1.8">
+          設定なしで使えます。「開く」で内容が埋まった登録画面が開くので、確認して保存してください。
+        </p>
         <div id="gcalList"></div>
       </div>
     </div>
@@ -483,6 +490,12 @@ textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
     <div class="sec">
       <h2>よくあるところ</h2>
       <div class="card" style="padding:6px 15px">
+        <div class="faq"><b>iPhone から Google カレンダーにまとめて入れたい</b><p>iPhone の Google カレンダー（App もブラウザも）にはインポート機能がありません。.ics や CSV を作っても読み込む口がないので、次のどちらかを使います。</p>
+          <ul>
+            <li><b>iOS に Google アカウントを追加してある場合</b>（設定 → カレンダー → アカウント）：書き出しタブの「共有」から iOS カレンダーや FirstSeed で取り込み、取り込み先に Google のカレンダーを選ぶ。いちばん簡単です</li>
+            <li><b>直接登録</b>：Google Cloud で無料の「OAuth クライアント ID」を作って設定に入れると、書き出しタブから Google にログインして予定を直接まとめて登録できます。手順は <a href="https://github.com/KURU77/techo-scan#google-カレンダーへの追加について" target="_blank" rel="noopener">README</a> に</li>
+          </ul>
+        </div>
         <div class="faq"><b>年がずれる</b><p>手帳には年が書かれていないことが多いので、「このページはいつ頃か」の日付を手がかりに推定します。年をまたぐページはここを合わせてから読み取ってください。</p></div>
         <div class="faq"><b>同じ予定が二重に入った</b><p>FirstSeed 側では、取り込んだ予定を選んで削除できます。次からは「書き出し済みの予定は除く」をオンに。このアプリは一度送った予定に印を付けています。</p></div>
         <div class="faq"><b>データはどこにあるか</b><p>読み取った予定はこの端末の localStorage にだけ残ります。写真はメモリ上だけで、保存も送信もされません（解析時に Anthropic へ送る場合を除く）。</p></div>
@@ -630,6 +643,13 @@ textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
       </label>
     </div>
     <label class="f">
+      <span>Google カレンダーにまとめて追加する場合：OAuth クライアント ID</span>
+      <input type="text" class="inp" id="sGClient" placeholder="xxxxxxxx.apps.googleusercontent.com" autocomplete="off" spellcheck="false">
+    </label>
+    <p class="hint" style="margin:-6px 2px 14px">
+      Google Cloud で無料で作れます。手順は <a href="https://github.com/KURU77/techo-scan#google-カレンダーへの追加について" target="_blank" rel="noopener">README</a> に。1 件ずつ追加するだけなら不要です。
+    </p>
+    <label class="f">
       <span>通知（アラーム）</span>
       <select class="inp" id="sAlarm">
         <option value="">付けない</option>
@@ -709,6 +729,8 @@ var DEFAULTS = {
   model: 'claude-opus-5',
   effort: 'high',
   gmodel: 'gemini-3.8-flash',
+  gclient: '',
+  gcalId: 'primary',
   dur: 60,
   calName: '手帳',
   alarm: '',
@@ -1712,6 +1734,7 @@ function renderExport(){
   ['#btnShare','#btnDownload','#btnCopyText'].forEach(function(s){ $(s).disabled = no; });
   $('#cntSel').textContent = list.length;
   renderGcal(list);
+  renderGapi();
 }
 
 /* Google カレンダーの「予定を作成」画面をあらかじめ埋めた URL */
@@ -1817,6 +1840,203 @@ function fallbackCopy(t){
 }
 
 /* ==========================================================
+   9b. Google カレンダーにまとめて追加（Calendar API）
+   iPhone の Google カレンダーにはインポート機能が無いので、
+   利用者自身の OAuth クライアント ID でログインして events.insert する。
+   ========================================================== */
+var GOAUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
+var GCAL = 'https://www.googleapis.com/calendar/v3/';
+var GSCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly';
+var LS_GTOKEN = 'techo.gtoken.v1';
+var LS_GSTATE = 'techo.gstate.v1';
+var gcals = null;      /* 取得したカレンダー一覧 */
+var gBusy = false, gLoading = false;
+
+function gToken(){
+  try{
+    var t = JSON.parse(localStorage.getItem(LS_GTOKEN) || 'null');
+    if(t && t.token && t.exp > Date.now() + 30000) return t.token;
+  }catch(_){}
+  return '';
+}
+function gLogout(){
+  try{ localStorage.removeItem(LS_GTOKEN); }catch(_){}
+  gcals = null; renderGapi();
+}
+function redirectURI(){
+  return location.origin + location.pathname.replace(/index\.html$/, '');
+}
+function gLogin(){
+  if(!S.set.gclient){ toast('設定で Google のクライアント ID を入れてください'); openSettings(); return; }
+  var state = uid();
+  try{ localStorage.setItem(LS_GSTATE, state); }catch(_){}
+  var q = [
+    'client_id=' + encodeURIComponent(S.set.gclient),
+    'redirect_uri=' + encodeURIComponent(redirectURI()),
+    'response_type=token',
+    'scope=' + encodeURIComponent(GSCOPES),
+    'state=' + state,
+    'include_granted_scopes=true',
+    'prompt=select_account'
+  ];
+  location.href = GOAUTH + '?' + q.join('&');
+}
+/* ログインから戻ってきたとき：URL のフラグメントにトークンが入っている */
+function gHandleRedirect(){
+  var h = location.hash || '';
+  if(h.indexOf('access_token=') < 0 && h.indexOf('error=') < 0) return false;
+  var p = new URLSearchParams(h.slice(1));
+  history.replaceState(null, '', location.pathname + location.search);
+  var st = '';
+  try{ st = localStorage.getItem(LS_GSTATE) || ''; localStorage.removeItem(LS_GSTATE); }catch(_){}
+  if(p.get('error')){ toast('Google のログインが取り消されました（' + p.get('error') + '）'); return true; }
+  if(!st || p.get('state') !== st){ toast('ログインの照合に失敗しました。もう一度お試しください'); return true; }
+  try{
+    localStorage.setItem(LS_GTOKEN, JSON.stringify({
+      token: p.get('access_token'), exp: Date.now() + ((+p.get('expires_in') || 3600) * 1000)
+    }));
+  }catch(_){}
+  toast('Google にログインしました');
+  return true;
+}
+
+function gFetch(path, opt){
+  opt = opt || {};
+  opt.headers = Object.assign({ 'authorization': 'Bearer ' + gToken() }, opt.headers || {});
+  return fetch(GCAL + path, opt).then(function(res){
+    if(res.status === 401){ gLogout(); throw new Error('Google のログインが切れました。もう一度ログインしてください。'); }
+    if(res.status === 204) return null;
+    return res.text().then(function(t){
+      var j = null; try{ j = JSON.parse(t); }catch(_){}
+      if(!res.ok){
+        var m = (j && j.error && j.error.message) || t.slice(0, 200);
+        if(res.status === 403 && /rate|quota/i.test(m)) throw new Error('Google 側の回数制限に当たりました。少し待ってからもう一度お試しください。');
+        if(res.status === 403) throw new Error('権限がありません。' + m);
+        throw new Error('Google カレンダーのエラー (' + res.status + ') ' + m);
+      }
+      return j;
+    });
+  });
+}
+
+function gLoadCalendars(){
+  return gFetch('users/me/calendarList?minAccessRole=writer&maxResults=250').then(function(j){
+    gcals = (j && j.items || []).map(function(c){
+      return { id: c.id, name: c.summaryOverride || c.summary || c.id, primary: !!c.primary, color: c.backgroundColor || '' };
+    }).sort(function(a, b){ return (b.primary - a.primary) || (a.name < b.name ? -1 : 1); });
+    if(!gcals.some(function(c){ return c.id === S.set.gcalId; })) S.set.gcalId = gcals.length ? gcals[0].id : 'primary';
+    return gcals;
+  });
+}
+
+/* 予定 → Calendar API の Event リソース */
+function gEventBody(e){
+  var body = { summary: e.title };
+  if(e.location) body.location = e.location;
+  var desc = [];
+  if(e.notes) desc.push(e.notes);
+  if(e.conf < 0.72) desc.push('※ 手帳からの読み取りに自信のない箇所があります');
+  desc.push('手帳スキャンから取り込み');
+  body.description = desc.join('\n');
+  if(e.allDay){
+    var last = e.endDate && e.endDate > e.date ? e.endDate : e.date;
+    body.start = { date: e.date };
+    body.end = { date: addDays(last, 1) };
+  }else{
+    var endDate = toMin(e.end) <= toMin(e.start) ? addDays(e.date, 1) : e.date;
+    body.start = { dateTime: e.date + 'T' + e.start + ':00', timeZone: 'Asia/Tokyo' };
+    body.end = { dateTime: endDate + 'T' + e.end + ':00', timeZone: 'Asia/Tokyo' };
+  }
+  var al = +S.set.alarm;
+  body.reminders = (al > 0 && !e.allDay)
+    ? { useDefault: false, overrides: [{ method: 'popup', minutes: al }] }
+    : { useDefault: true };
+  return body;
+}
+
+function gInsertAll(list){
+  if(gBusy || !list.length) return;
+  gBusy = true;
+  var calId = S.set.gcalId || 'primary';
+  var done = 0, fail = 0, errs = [];
+  var prog = $('#gapiProg');
+  function tick(){ if(prog) prog.textContent = '登録中… ' + (done + fail) + ' / ' + list.length + ' 件'; }
+  tick();
+  var chain = Promise.resolve();
+  list.forEach(function(e){
+    chain = chain.then(function(){
+      return gFetch('calendars/' + encodeURIComponent(calId) + '/events', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(gEventBody(e))
+      }).then(function(){
+        e.sent = e.sent || Date.now(); done++; saveEvents(); tick();
+      }).catch(function(err){
+        fail++; errs.push(e.title + '：' + (err.message || err)); tick();
+        if(/ログインが切れました/.test(err.message || '')) throw err;   /* 以降は無理なので打ち切り */
+      });
+    });
+  });
+  chain.catch(function(){}).then(function(){
+    gBusy = false;
+    renderEvents(); renderExport();
+    var box = $('#gapiResult');
+    if(box){
+      box.innerHTML = fail
+        ? '<div class="errbox"><b>' + done + ' 件を登録、' + fail + ' 件は失敗</b>' + errs.map(esc).join('<br>') + '</div>'
+        : '<div class="prog" style="margin-top:10px"><b>' + done + ' 件を Google カレンダーに登録しました</b></div>';
+    }
+    if(done) toast(done + ' 件を登録しました');
+  });
+}
+
+function renderGapi(){
+  var box = $('#gapiBox'); if(!box || gBusy) return;
+  var list = selected();
+  if(!S.set.gclient){
+    box.innerHTML =
+      '<div class="btn-row" style="margin-bottom:10px"><button class="btn" id="btnGSetup">設定でクライアント ID を入れる</button></div>' +
+      '<p class="hint" style="margin:0 0 10px">Google Cloud で「OAuth クライアント ID（ウェブ アプリケーション）」を作り、承認済みのリダイレクト URI に <code>' + esc(redirectURI()) + '</code> を登録します。所要 10 分ほど、無料です。</p>';
+    $('#btnGSetup').addEventListener('click', openSettings);
+    return;
+  }
+  if(!gToken()){
+    box.innerHTML =
+      '<div class="btn-row" style="margin-bottom:12px"><button class="btn primary wide" id="btnGLogin" style="padding:13px">' +
+      '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Google でログインして追加する</button></div>' +
+      '<p class="hint" style="margin:0 0 10px">ログインは 1 時間ほど有効です。Google の画面で「確認されていないアプリ」と出たら、「詳細」→「（アプリ名）に移動」で進めます（自分で作ったクライアント ID なので安全です）。</p>';
+    $('#btnGLogin').addEventListener('click', gLogin);
+    return;
+  }
+  var calOpts = gcals
+    ? gcals.map(function(c){ return '<option value="' + esc(c.id) + '"' + (c.id === S.set.gcalId ? ' selected' : '') + '>' + esc(c.name) + (c.primary ? '（メイン）' : '') + '</option>'; }).join('')
+    : '<option value="primary">メインのカレンダー</option>';
+  box.innerHTML =
+    '<label class="f"><span>登録先のカレンダー</span><select class="inp" id="gcalSel">' + calOpts + '</select></label>' +
+    '<div class="btn-row" style="margin-bottom:10px">' +
+      '<button class="btn primary" id="btnGInsert" style="flex:2;padding:13px"' + (list.length ? '' : ' disabled') + '>' + list.length + ' 件をまとめて登録</button>' +
+      '<button class="btn ghost" id="btnGLogout">ログアウト</button>' +
+    '</div>' +
+    '<div class="hint" id="gapiProg" style="margin:0 0 6px"></div><div id="gapiResult"></div>';
+  $('#gcalSel').addEventListener('change', function(){ S.set.gcalId = this.value; saveSet(); });
+  $('#btnGLogout').addEventListener('click', gLogout);
+  $('#btnGInsert').addEventListener('click', function(){
+    var l = selected(); if(!l.length) return;
+    if(!confirm(l.length + ' 件を Google カレンダー「' + $('#gcalSel').selectedOptions[0].textContent + '」に登録します。よろしいですか？')) return;
+    this.disabled = true;
+    gInsertAll(l);
+  });
+  if(!gcals && !gLoading){
+    gLoading = true;
+    gLoadCalendars().then(function(){ gLoading = false; renderGapi(); }).catch(function(err){
+      gLoading = false;
+      var p = $('#gapiProg'); if(p) p.textContent = err.message || String(err);
+      toast(err.message || String(err));
+    });
+  }
+}
+
+/* ==========================================================
    10. 設定
    ========================================================== */
 $('#btnSettings').addEventListener('click', openSettings);
@@ -1831,6 +2051,7 @@ function openSettings(){
   $('#sDur').value = String(S.set.dur);
   $('#sCalName').value = S.set.calName;
   $('#sAlarm').value = S.set.alarm || '';
+  $('#sGClient').value = S.set.gclient || '';
   syncProvider();
   openSheet('#sheetSet');
 }
@@ -1879,7 +2100,9 @@ $('#btnSaveSet').addEventListener('click', function(){
   S.set.dur = +$('#sDur').value || 60;
   S.set.calName = $('#sCalName').value.trim() || '手帳';
   S.set.alarm = $('#sAlarm').value;
+  S.set.gclient = $('#sGClient').value.trim();
   saveSet();
+  renderGapi();
   try{
     if(S.set.saveKey && S.key) localStorage.setItem(LS_KEY, S.key); else localStorage.removeItem(LS_KEY);
     if(S.set.saveKey && S.gkey) localStorage.setItem(LS_GKEY, S.gkey); else localStorage.removeItem(LS_GKEY);
@@ -1898,10 +2121,12 @@ $('#btnResetSent').addEventListener('click', function(){
    ========================================================== */
 load();
 $('#baseDate').value = ymd(new Date());
+var fromGoogle = gHandleRedirect();
 renderShots();
 renderEvents();
 renderExport();
 updateBadge();
+if(fromGoogle) show('export');
 if(apiKey()) $('#analyzeHint').style.opacity = '.6';
 
 if('serviceWorker' in navigator){
