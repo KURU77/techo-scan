@@ -1,7 +1,7 @@
 /* 手帳スキャン — オフライン用サービスワーカー
    HTML はネットワーク優先（更新をすぐ反映）、それ以外はキャッシュ優先。
    API（Anthropic / Gemini）への通信は一切キャッシュしない。 */
-var CACHE = 'techo-scan-v7';
+var CACHE = 'techo-scan-v8';
 var ASSETS = [
   './',
   './index.html',

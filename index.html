@@ -499,6 +499,11 @@ textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
 
   <!-- ============ 書き出し ============ -->
   <section class="view" id="view-export">
+    <div class="sec" id="fixSec" hidden>
+      <h2>訂正（書き出したあとに変えた予定）</h2>
+      <div class="card" style="padding:15px 15px 6px" id="fixBox"></div>
+    </div>
+
     <div class="sec">
       <h2>FirstSeed カレンダーへ追加</h2>
       <div class="card" style="padding:15px 15px 6px">
@@ -620,7 +625,7 @@ textarea.inp{min-height:96px; resize:vertical; line-height:1.6}
     </button>
     <button class="tab" data-view="export">
       <svg viewBox="0 0 24 24"><path d="M12 16V4"/><path d="M8 8l4-4 4 4"/><path d="M4 14v4.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V14"/></svg>
-      書き出し
+      書き出し<span class="badge" id="fixBadge" hidden>0</span>
     </button>
     <button class="tab" data-view="help">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.5"/><path d="M12 17h.01"/></svg>
@@ -848,6 +853,7 @@ var LS_KEY = 'techo.key.v1';
 var LS_GKEY = 'techo.gkey.v1';
 var LS_THEME = 'techo.theme.v1';
 var LS_CATS = 'techo.cats.v1';
+var LS_FIX = 'techo.fixlog.v1';   /* 書き出し後に消した予定（相手側でも消す必要があるもの） */
 
 var DEFAULTS = {
   provider: 'gemini',
@@ -870,6 +876,7 @@ var S = {
   key: '',
   gkey: '',
   cats: [],          /* {id, name, color} */
+  fixlog: [],        /* {id, text, gcal, at} 削除の訂正待ち */
   catFilter: 'all',  /* 'all' | 'none' | 分類 id */
   pageNote: '',
   busy: false
@@ -886,6 +893,7 @@ function load(){
   }catch(_){}
   try{ S.key = localStorage.getItem(LS_KEY) || ''; }catch(_){}
   try{ S.gkey = localStorage.getItem(LS_GKEY) || ''; }catch(_){}
+  try{ var fl = JSON.parse(localStorage.getItem(LS_FIX) || '[]'); if(Array.isArray(fl)) S.fixlog = fl; }catch(_){}
   try{
     var c = localStorage.getItem(LS_CATS);
     if(c === null){
@@ -900,6 +908,9 @@ function load(){
     var saved = JSON.parse(localStorage.getItem(LS_SET) || '{}') || {};
     if(S.key && !S.gkey && !saved.provider) S.set.provider = 'anthropic';
   }catch(_){}
+}
+function saveFix(){
+  try{ localStorage.setItem(LS_FIX, JSON.stringify(S.fixlog)); }catch(_){}
 }
 function saveCats(){
   try{ localStorage.setItem(LS_CATS, JSON.stringify(S.cats)); }catch(_){}
@@ -1001,6 +1012,32 @@ function normTime(t){
   if(hh > 24 || mm > 59) return '';
   return pad2(hh % 24) + ':' + pad2(mm);
 }
+/* 書き出した時点の内容を覚えておき、あとで変わったか比べる */
+function sig(e){
+  var c = e.cat ? catById(e.cat) : null;
+  return [e.date, e.endDate || '', e.allDay ? 1 : 0, e.start || '', e.end || '', e.title, e.location || '', e.notes || '', c ? c.name : ''].join('|');
+}
+function evText(e){
+  var w = dowOf(e.date);
+  var t = fmtDay(e.date) + (w >= 0 ? '(' + WD[w] + ')' : '') + ' ' +
+    (e.allDay ? '終日' + (e.endDate ? '〜' + fmtDay(e.endDate) : '') : e.start + '–' + e.end) + ' ' + e.title;
+  if(e.location) t += ' @' + e.location;
+  return t;
+}
+/* 書き出し済みの予定が変わったら「訂正待ち」にする */
+function markDirty(e, prev){
+  if(!e.sent || !e.snap) return;
+  if(sig(e) === e.snap){ if(e.dirty && !e.prevText){ e.dirty = false; } return; }
+  if(!e.dirty){ e.dirty = true; e.prevText = evText(prev); }
+}
+function dirtyEvents(){ return S.events.filter(function(e){ return e.sent && e.dirty; }); }
+function fixCount(){ return dirtyEvents().length + S.fixlog.length; }
+/* 消した予定を訂正待ちに積む（相手側でも消してもらう／Google なら消せる） */
+function logDeleted(e){
+  if(!e.sent) return;
+  S.fixlog.push({ id: e.id, text: e.prevText || evText(e), gcal: e.gcal || null, at: Date.now() });
+  saveFix();
+}
 function contentKey(ev){
   return ev.date + '|' + (ev.allDay ? 'AD' : ev.start + '-' + ev.end) + '|' + ev.title.replace(/\s/g, '');
 }
@@ -1056,6 +1093,7 @@ $$('.tab').forEach(function(t){
 function updateBadge(){
   var b = $('#tabBadge'), n = S.events.length;
   b.hidden = n === 0; b.textContent = n > 99 ? '99+' : n;
+  var f = $('#fixBadge'); if(f){ var k = fixCount(); f.hidden = k === 0; f.textContent = k; }
 }
 
 /* テーマ */
@@ -1739,7 +1777,8 @@ function evHTML(e){
   var c = e.cat ? catById(e.cat) : null;
   if(c) tags += '<span class="chip cat' + (c.color ? '' : ' plain') + '">' + esc(c.name) + '</span>';
   if(e.conf < 0.72) tags += '<span class="chip warn">要確認</span>';
-  if(e.sent) tags += '<span class="chip ok">書き出し済み</span>';
+  if(e.sent && e.dirty) tags += '<span class="chip warn">訂正待ち</span>';
+  else if(e.sent) tags += '<span class="chip ok">書き出し済み</span>';
   return '<div class="ev' + (e.on ? '' : ' off') + (e.sent ? ' sent' : '') + (c && c.color ? ' hl cat-' + c.color : '') + '">' +
     '<button class="ck" data-ck="' + e.id + '" role="checkbox" aria-checked="' + (e.on ? 'true' : 'false') + '" aria-label="選択">' + CK_SVG + '</button>' +
     '<button class="ev-body" data-edit="' + e.id + '">' +
@@ -1764,7 +1803,9 @@ $('#btnNone').addEventListener('click', function(){
 $('#btnDelSel').addEventListener('click', function(){
   var n = S.events.filter(function(e){ return e.on; }).length;
   if(!n){ toast('選択されていません'); return; }
-  if(!confirm(n + ' 件を消します。よろしいですか？')) return;
+  var sentN = S.events.filter(function(e){ return e.on && e.sent; }).length;
+  if(!confirm(n + ' 件を消します。' + (sentN ? 'うち ' + sentN + ' 件は書き出し済みで、相手側は「訂正」から消すか手で消すことになります。' : '') + 'よろしいですか？')) return;
+  S.events.forEach(function(e){ if(e.on) logDeleted(e); });
   S.events = S.events.filter(function(e){ return !e.on; });
   saveEvents(); renderEvents(); renderExport(); updateBadge(); toast(n + ' 件を消しました');
 });
@@ -1820,6 +1861,7 @@ $('#btnSaveEv').addEventListener('click', function(){
   if(ed && !(parseYMD(ed) && ed > d)) ed = '';
 
   var e = editing ? byId(editing) : null;
+  var prev = e ? Object.assign({}, e) : null;
   if(!e){
     e = normalize({ date: d, allDay: allDay, start: st, end: en, title: title, confidence: 1 }, parseYMD(d).getFullYear());
     if(!e){ toast('保存できませんでした'); return; }
@@ -1832,14 +1874,23 @@ $('#btnSaveEv').addEventListener('click', function(){
   e.notes = $('#eNotes').value.trim();
   e.cat = catById($('#eCat').value) ? $('#eCat').value : '';
   e.conf = 1; e.on = true;
+  if(prev) markDirty(e, prev);
   sortEvents(); saveEvents(); renderEvents(); renderExport(); updateBadge();
-  closeSheets(); toast('保存しました');
+  closeSheets();
+  if(e.dirty && e.gcal && gToken()){
+    if(confirm('この予定は Google カレンダーに登録済みです。Google 側も今すぐ直しますか？')){ gFixAll([e], []); return; }
+  }
+  if(e.dirty) toast('保存しました。書き出しタブの「訂正」から相手側も直せます');
+  else toast('保存しました');
 });
 $('#btnDelEv').addEventListener('click', function(){
   if(!editing) return;
-  S.events = S.events.filter(function(e){ return e.id !== editing; });
+  var e = byId(editing);
+  if(e && e.sent && !confirm('この予定は書き出し済みです。アプリから消すと、相手側のカレンダーは「訂正」から消せます（Google 直接登録）か、手で消すことになります。消しますか？')) return;
+  if(e) logDeleted(e);
+  S.events = S.events.filter(function(x){ return x.id !== editing; });
   saveEvents(); renderEvents(); renderExport(); updateBadge();
-  closeSheets(); toast('消しました');
+  closeSheets(); toast(e && e.sent ? '消しました。相手側は書き出しタブの「訂正」から' : '消しました');
 });
 
 /* ---- 分類の編集シート ---- */
@@ -1982,7 +2033,8 @@ function buildICS(list){
     if(e.conf < 0.72) cats.push('要確認');
     if(cats.length) L.push('CATEGORIES:' + cats.map(icsEsc).join(','));
     L.push('TRANSP:' + (e.allDay ? 'TRANSPARENT' : 'OPAQUE'));
-    L.push('SEQUENCE:0');
+    /* 訂正の書き出しなら更新回数を 1 つ上げる（markSent 側でも同じだけ進める） */
+    L.push('SEQUENCE:' + ((e.seq || 0) + (e.dirty ? 1 : 0)));
     var al = +S.set.alarm;
     if(al > 0 && !e.allDay){
       L.push('BEGIN:VALARM');
@@ -2019,9 +2071,9 @@ function buildText(list){
   return out.join('\n');
 }
 
-function icsFileName(){
+function icsFileName(prefix){
   var d = new Date();
-  return 'techo-' + d.getFullYear() + pad2(d.getMonth()+1) + pad2(d.getDate()) +
+  return (prefix || 'techo') + '-' + d.getFullYear() + pad2(d.getMonth()+1) + pad2(d.getDate()) +
          '-' + pad2(d.getHours()) + pad2(d.getMinutes()) + '.ics';
 }
 
@@ -2045,6 +2097,7 @@ function renderExport(){
   $('#cntSel').textContent = list.length;
   renderGcal(list);
   renderGapi();
+  renderFix();
 }
 
 /* Google カレンダーの「予定を作成」画面をあらかじめ埋めた URL */
@@ -2092,14 +2145,18 @@ function renderGcal(list){
 
 function markSent(list){
   var now = Date.now();
-  list.forEach(function(e){ e.sent = now; });
+  list.forEach(function(e){
+    if(e.dirty){ e.seq = (e.seq || 0) + 1; e.dirty = false; e.prevText = ''; }
+    e.sent = now; e.snap = sig(e);
+  });
   saveEvents(); renderEvents(); renderExport();
 }
 
-$('#btnShare').addEventListener('click', function(){
-  var list = selected(); if(!list.length) return;
+$('#btnShare').addEventListener('click', function(){ shareICS(selected()); });
+function shareICS(list, prefix){
+  if(!list.length) return;
   var text = buildICS(list);
-  var name = icsFileName();
+  var name = icsFileName(prefix);
   var file = null;
   try{ file = new File([text], name, { type: 'text/calendar' }); }catch(_){}
 
@@ -2114,7 +2171,7 @@ $('#btnShare').addEventListener('click', function(){
     toast('共有に対応していないため、ファイルとして保存します');
     downloadICS(text, name, list);
   }
-});
+}
 
 $('#btnDownload').addEventListener('click', function(){
   var list = selected(); if(!list.length) return;
@@ -2282,8 +2339,10 @@ function gInsertAll(list){
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(gEventBody(e))
-      }).then(function(){
-        e.sent = e.sent || Date.now(); done++; saveEvents(); tick();
+      }).then(function(j){
+        if(j && j.id) e.gcal = { cal: calId, id: j.id };
+        if(e.dirty){ e.seq = (e.seq || 0) + 1; e.dirty = false; e.prevText = ''; }
+        e.sent = e.sent || Date.now(); e.snap = sig(e); done++; saveEvents(); tick();
       }).catch(function(err){
         fail++; errs.push(e.title + '：' + (err.message || err)); tick();
         if(/ログインが切れました/.test(err.message || '')) throw err;   /* 以降は無理なので打ち切り */
@@ -2301,6 +2360,104 @@ function gInsertAll(list){
     }
     if(done) toast(done + ' 件を登録しました');
   });
+}
+
+/* 訂正: Google に登録済みの予定を PATCH、消した予定を DELETE */
+function gFixAll(edits, dels){
+  if(gBusy) return;
+  if(!gToken()){ toast('先に書き出しタブで Google にログインしてください'); show('export'); return; }
+  gBusy = true;
+  var done = 0, fail = 0, errs = [];
+  var chain = Promise.resolve();
+  edits.forEach(function(e){
+    chain = chain.then(function(){
+      return gFetch('calendars/' + encodeURIComponent(e.gcal.cal) + '/events/' + encodeURIComponent(e.gcal.id), {
+        method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(gEventBody(e))
+      }).then(function(){
+        e.seq = (e.seq || 0) + 1; e.dirty = false; e.prevText = ''; e.snap = sig(e); e.sent = Date.now(); done++; saveEvents();
+      }).catch(function(err){
+        fail++; errs.push(e.title + '：' + (err.message || err));
+        if(/ログインが切れました/.test(err.message || '')) throw err;
+      });
+    });
+  });
+  dels.forEach(function(f){
+    chain = chain.then(function(){
+      return gFetch('calendars/' + encodeURIComponent(f.gcal.cal) + '/events/' + encodeURIComponent(f.gcal.id), { method: 'DELETE' })
+      .then(function(){ S.fixlog = S.fixlog.filter(function(x){ return x !== f; }); saveFix(); done++; })
+      .catch(function(err){
+        /* もう消えている（404/410）なら済みにする */
+        if(/\((404|410)\)/.test(err.message || '')){ S.fixlog = S.fixlog.filter(function(x){ return x !== f; }); saveFix(); done++; return; }
+        fail++; errs.push(f.text + '：' + (err.message || err));
+        if(/ログインが切れました/.test(err.message || '')) throw err;
+      });
+    });
+  });
+  chain.catch(function(){}).then(function(){
+    gBusy = false;
+    renderEvents(); renderExport();
+    if(fail){
+      var box = $('#fixResult'); if(box) box.innerHTML = '<div class="errbox"><b>' + done + ' 件を反映、' + fail + ' 件は失敗</b>' + errs.map(esc).join('<br>') + '</div>';
+    }
+    toast(fail ? done + ' 件を反映（' + fail + ' 件は失敗）' : done + ' 件を Google カレンダーに反映しました');
+  });
+}
+
+function renderFix(){
+  var sec = $('#fixSec'), box = $('#fixBox'); if(!sec || !box) return;
+  var edits = dirtyEvents();
+  var dels = S.fixlog;
+  if(!edits.length && !dels.length){ sec.hidden = true; box.innerHTML = ''; return; }
+  sec.hidden = false;
+  var gEdits = edits.filter(function(e){ return e.gcal; });
+  var gDels = dels.filter(function(f){ return f.gcal; });
+  var icsEdits = edits;                                  /* .ics は全件に同じ UID で出せる */
+  var manualDels = dels.filter(function(f){ return !f.gcal; });
+
+  var h = '<p style="margin:0 0 12px; font-size:13.5px; color:var(--muted); line-height:1.8">書き出したあとに直した予定が <b style="color:var(--ink)">' + edits.length + ' 件</b>、消した予定が <b style="color:var(--ink)">' + dels.length + ' 件</b> あります。相手側のカレンダーにも反映しましょう。</p>';
+
+  if(gEdits.length || gDels.length){
+    h += '<div class="btn-row" style="margin-bottom:8px"><button class="btn primary wide" id="btnGFix" style="padding:13px">' +
+      (gToken() ? 'Google カレンダーを更新（' + (gEdits.length + gDels.length) + ' 件）' : 'Google にログインして更新（' + (gEdits.length + gDels.length) + ' 件）') + '</button></div>' +
+      '<p class="hint" style="margin:0 0 12px">直接登録した予定はそのまま上書き・削除できます。</p>';
+  }
+  if(icsEdits.length){
+    h += '<div class="btn-row" style="margin-bottom:8px"><button class="btn" id="btnFixShare">訂正用 .ics を共有</button><button class="btn" id="btnFixDl">訂正用 .ics を保存</button></div>' +
+      '<p class="hint" style="margin:0 0 12px">同じ ID・更新回数を上げた .ics です。Google カレンダー（PC のインポート）など ID で上書きするアプリではそのまま置き換わります。FirstSeed／iOS カレンダーは上書きされず 2 つ並ぶことがあるので、その場合は古いほうを消してください。</p>';
+  }
+  h += '<div class="hint" style="margin:0 0 6px 2px;font-weight:700">手で直す場合のメモ</div>';
+  h += edits.map(function(e){
+    return '<div class="grow"><div class="gt"><b>' + esc(e.title) + '</b><span>旧: ' + esc(e.prevText || '') + '</span><br><span>新: ' + esc(evText(e)) + '</span>' +
+      (e.gcal ? '' : '<span style="margin-left:6px">（' + (e.sent ? '.ics／1件ずつ' : '') + '）</span>') + '</div>' +
+      '<button class="btn" data-fixdone="' + e.id + '">済み</button></div>';
+  }).join('');
+  h += dels.map(function(f, i){
+    return '<div class="grow"><div class="gt"><b>削除</b><span>' + esc(f.text) + '</span></div><button class="btn" data-deldone="' + i + '">済み</button></div>';
+  }).join('');
+  h += '<div id="fixResult"></div>';
+  box.innerHTML = h;
+
+  var gb = $('#btnGFix');
+  if(gb) gb.addEventListener('click', function(){
+    if(!gToken()){ gLogin(); return; }
+    if(!confirm('Google カレンダーの予定を ' + gEdits.length + ' 件上書きし、' + gDels.length + ' 件削除します。よろしいですか？')) return;
+    gb.disabled = true; gFixAll(gEdits, gDels);
+  });
+  var fs = $('#btnFixShare'); if(fs) fs.addEventListener('click', function(){ shareICS(icsEdits, 'techo-fix'); });
+  var fd = $('#btnFixDl'); if(fd) fd.addEventListener('click', function(){ downloadICS(buildICS(icsEdits), icsFileName('techo-fix'), icsEdits); });
+  $$('[data-fixdone]', box).forEach(function(b){
+    b.addEventListener('click', function(){
+      var e = byId(b.dataset.fixdone); if(!e) return;
+      e.seq = (e.seq || 0) + 1; e.dirty = false; e.prevText = ''; e.snap = sig(e);
+      saveEvents(); renderEvents(); renderExport();
+    });
+  });
+  $$('[data-deldone]', box).forEach(function(b){
+    b.addEventListener('click', function(){
+      S.fixlog.splice(+b.dataset.deldone, 1); saveFix(); renderExport();
+    });
+  });
+  updateBadge();
 }
 
 function renderGapi(){
